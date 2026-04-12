@@ -1,0 +1,6 @@
+__pycache__/
+*.py[cod]
+.DS_Store
+AF-*.pdb
+AF-*.cif
+AF-*_pae.json
