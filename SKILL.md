@@ -8,7 +8,8 @@ description: >
   PDB files, protein structures, molecular rendering, pLDDT, RMSD,
   structure alignment, binding pockets, drug-target analysis, cryo-EM
   density maps, homology modeling, or protein design. Also trigger when
-  the user opens/loads .pdb, .cif, .sdf, .mol2, or .mrc files.
+  the user opens/loads .pdb, .cif, .sdf, or .mol2 files, or .mrc
+  density maps (see references/chimerax.md for cryo-EM workflows).
   DO NOT TRIGGER for: general biology questions with no structural component,
   bioinformatics sequence-only tasks (BLAST, MSA), or genomics/transcriptomics.
 ---

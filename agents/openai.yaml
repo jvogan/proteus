@@ -1,6 +1,6 @@
 interface:
   display_name: "Proteus"
-  short_description: "Analyze and render protein structures"
+  short_description: "Drive PyMOL, ChimeraX, AlphaFold DB, and Rosetta headlessly — structure rendering, analysis, and confidence interpretation for AI agent workflows"
   default_prompt: "Use $proteus to inspect this structural biology task, choose the right local toolchain, and return a concise analysis plus any generated outputs."
 
 policy:

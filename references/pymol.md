@@ -59,10 +59,13 @@ structured data back from PyMOL scripts:
 import subprocess, json, tempfile, os
 
 PYMOL_BIN = "/path/to/pymol"  # Detected above
-OUTPUT_FILE = "/tmp/pymol_agent_output.json"
 
 def run_pymol_script(script_content: str, timeout: int = 120) -> dict:
     """Run PyMOL Python script headlessly, return structured JSON."""
+    # Per-process temp file avoids collisions in parallel runs
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as out_f:
+        output_path = out_f.name
+
     with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
         wrapper = f'''
 import json, sys
@@ -75,7 +78,7 @@ except Exception as e:
     _output["status"] = "error"
     _output["error"] = str(e)
 finally:
-    with open("{OUTPUT_FILE}", "w") as _f:
+    with open("{output_path}", "w") as _f:
         json.dump(_output, _f, indent=2, default=str)
     try:
         cmd.quit()
@@ -88,14 +91,14 @@ finally:
     try:
         subprocess.run([PYMOL_BIN, "-c", "-q", "-r", script_path],
                        capture_output=True, text=True, timeout=timeout)
-        if os.path.exists(OUTPUT_FILE):
-            with open(OUTPUT_FILE) as f:
+        if os.path.exists(output_path):
+            with open(output_path) as f:
                 return json.load(f)
         return {"status": "error", "error": "No output file produced"}
     finally:
         os.unlink(script_path)
-        if os.path.exists(OUTPUT_FILE):
-            os.unlink(OUTPUT_FILE)
+        if os.path.exists(output_path):
+            os.unlink(output_path)
 ```
 
 **Why this pattern?** `print()` inside PyMOL headless mode gets swallowed or
