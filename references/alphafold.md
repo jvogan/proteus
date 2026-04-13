@@ -63,10 +63,11 @@ def fetch_alphafold(uniprot_id: str, output_dir: str = ".", include_pae: bool = 
 
     version = entry.get("latestVersion", 4)
     gene = entry.get("gene", uniprot_id)
+    model_id = entry.get("modelEntityId", f"AF-{uniprot_id}-F1")
 
     # Step 2: Download structure
     pdb_url = entry["pdbUrl"]
-    pdb_path = os.path.join(output_dir, f"AF-{uniprot_id}-{gene}.pdb")
+    pdb_path = os.path.join(output_dir, f"{model_id}.pdb")
     urllib.request.urlretrieve(pdb_url, pdb_path)
 
     # Step 3: Download PAE if requested
@@ -74,7 +75,7 @@ def fetch_alphafold(uniprot_id: str, output_dir: str = ".", include_pae: bool = 
     if include_pae:
         pae_url = entry.get("paeDocUrl")
         if pae_url:
-            pae_path = os.path.join(output_dir, f"AF-{uniprot_id}-{gene}_pae.json")
+            pae_path = os.path.join(output_dir, f"{model_id}_pae.json")
             urllib.request.urlretrieve(pae_url, pae_path)
 
     # Step 4: Report confidence stats

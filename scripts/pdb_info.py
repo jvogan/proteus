@@ -60,7 +60,13 @@ def parse_pdb(path: str, as_json: bool = False, force_alphafold: bool = False):
                 chain = line[21]
                 resn = line[17:20].strip()
                 resi = line[22:26].strip()
-                bfac = float(line[60:66].strip())
+                bfac_str = line[60:66].strip()
+                if not bfac_str:
+                    continue
+                try:
+                    bfac = float(bfac_str)
+                except ValueError:
+                    continue
                 chains.add(chain)
                 residues[chain].add((resn, resi))
                 b_factors.append(bfac)
