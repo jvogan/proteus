@@ -5,11 +5,12 @@ description: >
   Use this skill when the user asks you to work with protein structures,
   molecular visualization, or structural biology tools. TRIGGER when:
   the user mentions PyMOL, ChimeraX, AlphaFold, Rosetta, PyRosetta,
-  PDB files, protein structures, molecular rendering, pLDDT, RMSD,
-  structure alignment, binding pockets, drug-target analysis, cryo-EM
-  density maps, homology modeling, or protein design. Also trigger when
-  the user opens/loads .pdb, .cif, .sdf, or .mol2 files, or .mrc
-  density maps (see references/chimerax.md for cryo-EM workflows).
+  UniProt, RCSB PDB, PDBe, PDB files, protein structures, molecular
+  rendering, pLDDT, RMSD, structure alignment, binding pockets,
+  drug-target analysis, cryo-EM density maps, homology modeling, or
+  protein design. Also trigger when the user opens/loads .pdb, .cif,
+  .mmcif, .sdf, or .mol2 files, or .mrc density maps (see
+  references/chimerax.md for cryo-EM workflows).
   DO NOT TRIGGER for: general biology questions with no structural component,
   bioinformatics sequence-only tasks (BLAST, MSA), or genomics/transcriptomics.
 ---
@@ -59,8 +60,11 @@ fit the task; otherwise tell the user what to install and stop.
 | H-bonds, SASA, clashes, contacts | **ChimeraX** | Built-in analysis commands, even in `--nogui` |
 | Structure alignment + RMSD | **Either** | PyMOL `cealign` or ChimeraX `matchmaker` |
 | AlphaFold confidence analysis | **PyMOL** + AlphaFold API | Fetch prediction, color by pLDDT, render headless |
+| Experimental PDB download | **`fetch_pdb.py`** | RCSB metadata + coordinates |
+| Protein name -> accession | **`uniprot_lookup.py`** | Resolve names/genes before AlphaFold fetch |
+| PDB/mmCIF preflight | **`structure_info.py`** | Zero-dependency file inspection |
 | Cryo-EM density map visualization | **ChimeraX REST API** | Volume rendering requires GPU/display |
-| Quick PDB file inspection | **`pdb_info.py` script** | Zero dependencies, instant |
+| Quick legacy PDB inspection | **`pdb_info.py` script** | Backward-compatible PDB-only inspector |
 | Protein design / scoring | **Rosetta/PyRosetta** | Or ML alternatives (ProteinMPNN, RFdiffusion) |
 
 **Key architectural insight:** ChimeraX `--nogui` mode has NO OpenGL context on macOS.
@@ -76,6 +80,9 @@ Load reference files on demand — don't read all of them upfront:
 | PyMOL (any task) | `references/pymol.md` |
 | ChimeraX (any task) | `references/chimerax.md` |
 | AlphaFold DB predictions | `references/alphafold.md` |
+| PDB/UniProt/PDBe/RCSB data lookup | `references/data-sources.md` |
+| File format choices (.pdb, .cif, .sdf, .mrc) | `references/file-formats.md` |
+| Prediction models beyond AlphaFold DB | `references/prediction-models.md` |
 | Rosetta / protein design | `references/rosetta.md` |
 
 ## Agent Helper Scripts
@@ -88,10 +95,13 @@ debugging, patching, or the help text is insufficient for the task.
 
 | Script | Purpose | Example |
 |---|---|---|
+| `scripts/fetch_pdb.py` | RCSB PDB metadata + coordinate fetcher | `python scripts/fetch_pdb.py 4HHB --json` |
+| `scripts/uniprot_lookup.py` | Protein/gene name to UniProt accession | `python scripts/uniprot_lookup.py TP53 --gene-exact --json` |
+| `scripts/structure_info.py` | Zero-dep PDB/mmCIF inspector | `python scripts/structure_info.py structure.cif --json` |
 | `scripts/pymol_agent.py` | Headless PyMOL driver | `python scripts/pymol_agent.py info structure.pdb` |
 | `scripts/chimerax_agent.py` | Headless ChimeraX driver | `python scripts/chimerax_agent.py run "open 1ubq; info chains #1"` |
 | `scripts/fetch_alphafold.py` | AlphaFold DB fetcher | `python scripts/fetch_alphafold.py P04637 --pae` |
-| `scripts/pdb_info.py` | Zero-dep PDB inspector (PDB format only, not CIF) | `python scripts/pdb_info.py structure.pdb` |
+| `scripts/pdb_info.py` | Legacy zero-dep PDB inspector (PDB only) | `python scripts/pdb_info.py structure.pdb` |
 
 ## Critical Gotchas (Read This First)
 
@@ -192,12 +202,21 @@ can skip by knowing them upfront.
 
 ### Quick Structure Inspection
 ```bash
-python scripts/pdb_info.py structure.pdb          # zero-dep overview
-python scripts/pymol_agent.py info structure.pdb   # detailed with PyMOL
+python scripts/structure_info.py structure.cif --json  # zero-dep PDB/mmCIF overview
+python scripts/pdb_info.py structure.pdb               # legacy PDB-only overview
+python scripts/pymol_agent.py info structure.pdb        # detailed with PyMOL
+```
+
+### Experimental Structure Fetch
+```bash
+python scripts/fetch_pdb.py 4HHB --json                 # RCSB metadata + mmCIF
+python scripts/fetch_pdb.py 1HSG --format pdb           # legacy PDB format if needed
+python scripts/fetch_pdb.py 4HHB --assembly 1 --json    # biological assembly mmCIF
 ```
 
 ### AlphaFold Confidence Analysis
 ```bash
+python scripts/uniprot_lookup.py TP53 --gene-exact --json  # resolve accession if needed
 python scripts/fetch_alphafold.py P04637 --pae     # fetch p53 prediction
 # Output filename uses modelEntityId from API, typically AF-{UNIPROT}-F1.pdb
 python scripts/pymol_agent.py render AF-P04637-F1.pdb output.png
@@ -287,7 +306,10 @@ For multi-step workflows, write a summary JSON report at the end with:
 
 | I want to... | Do this |
 |---|---|
-| Inspect a PDB file (no tools needed) | `python scripts/pdb_info.py file.pdb` |
+| Resolve protein/gene name to UniProt | `python scripts/uniprot_lookup.py TP53 --gene-exact --json` |
+| Fetch an experimental PDB structure | `python scripts/fetch_pdb.py 4HHB --json` |
+| Inspect PDB/mmCIF file (no tools needed) | `python scripts/structure_info.py file.cif --json` |
+| Inspect a legacy PDB file | `python scripts/pdb_info.py file.pdb` |
 | Get structure info via PyMOL | `python scripts/pymol_agent.py info file.pdb` |
 | Render a structure headless | `python scripts/pymol_agent.py render file.pdb out.png` |
 | Fetch an AlphaFold prediction | `python scripts/fetch_alphafold.py UNIPROT_ID --pae` |
@@ -298,4 +320,7 @@ For multi-step workflows, write a summary JSON report at the end with:
 | Run arbitrary ChimeraX commands | `python scripts/chimerax_agent.py run "open 1ubq; info chains #1"` |
 | Control ChimeraX GUI via REST | Read `references/chimerax.md` — REST API section |
 | Color by AlphaFold confidence | Read `references/alphafold.md` — pLDDT Coloring section |
+| Choose between PDB, mmCIF, SDF, MRC | Read `references/file-formats.md` |
+| Use RCSB/PDBe/UniProt APIs | Read `references/data-sources.md` |
+| Consider AF3/Boltz/Chai/ColabFold | Read `references/prediction-models.md` |
 | Do protein design without Rosetta | Read `references/rosetta.md` — ML Alternatives section |

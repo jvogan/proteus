@@ -1,0 +1,6 @@
+TITLE     TINY TEST STRUCTURE
+ATOM      1  N   GLY A   1      11.104  13.207   2.100  1.00 90.00           N
+ATOM      2  CA  GLY A   1      12.560  13.205   2.100  1.00 91.00           C
+ATOM      3  C   GLY A   1      13.000  14.600   2.100  1.00 92.00           C
+HETATM    4  C1  LIG B   2      14.000  15.000   3.000  1.00 40.00           C
+END

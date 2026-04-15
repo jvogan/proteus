@@ -5,11 +5,12 @@
 # Proteus
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/)
 
 Proteus is a **skill** for AI coding agents — a drop-in knowledge pack that teaches [Claude Code](https://docs.anthropic.com/en/docs/claude-code), [Codex](https://openai.com/index/codex/), and similar agents how to drive structural biology tools from the terminal.
 
 It covers PyMOL, ChimeraX, AlphaFold DB, and Rosetta/PyRosetta: when to use which tool, how to call them headlessly, and the undocumented gotchas that otherwise cost hours of debugging.
+It also includes lightweight RCSB PDB and UniProt helpers so agents can resolve names like `TP53` or IDs like `4HHB` into local coordinate files.
 
 Named after the shape-shifting Greek god — and after the root of the word *protein*.
 
@@ -22,6 +23,9 @@ Named after the shape-shifting Greek god — and after the root of the word *pro
 - Headless PyMOL rendering for publication-quality structure figures
 - ChimeraX analysis helpers for alignment, SASA, and hydrogen-bond workflows
 - AlphaFold DB fetch with confidence interpretation and pLDDT coloring
+- RCSB PDB fetch for experimental coordinates, metadata, and biological assembly mmCIF
+- UniProt lookup for resolving gene/protein names before AlphaFold fetches
+- PDB/mmCIF inspection via `structure_info.py`
 - Rosetta/PyRosetta patterns plus ML alternatives (ProteinMPNN, ESM2)
 - Zero-dependency PDB file inspector (`pdb_info.py` — stdlib only)
 - Structured JSON output from all helper scripts, safe for parallel agent runs
@@ -51,7 +55,7 @@ Proteus degrades gracefully — `pdb_info.py` and AlphaFold metadata fetches wor
 | **AlphaFold DB** | Public prediction database | No install — uses the [EBI REST API](https://alphafold.ebi.ac.uk) |
 | **PyRosetta** | Scoring, energy minimization, protein design | `pip install pyrosetta-installer` (academic license required) |
 
-Python 3.8+ is required. All helper scripts use only the standard library.
+Python 3.10+ is required. All helper scripts use only the standard library.
 
 ## Quick examples
 
@@ -68,6 +72,9 @@ The helper scripts also work standalone:
 
 ```bash
 python3 scripts/pdb_info.py structure.pdb                          # zero-dep PDB inspection
+python3 scripts/structure_info.py structure.cif --json             # PDB/mmCIF inspection
+python3 scripts/fetch_pdb.py 4HHB --json                           # RCSB PDB fetch
+python3 scripts/uniprot_lookup.py TP53 --gene-exact --json         # UniProt lookup
 python3 scripts/fetch_alphafold.py P04637 --pae --json             # AlphaFold fetch
 python3 scripts/pymol_agent.py render structure.pdb output.png     # headless render
 python3 scripts/chimerax_agent.py align reference.pdb mobile.pdb   # structure alignment
@@ -82,12 +89,18 @@ proteus/
 ├── references/           # On-demand deep docs (loaded as needed)
 │   ├── alphafold.md
 │   ├── chimerax.md
+│   ├── data-sources.md
+│   ├── file-formats.md
+│   ├── prediction-models.md
 │   ├── pymol.md
 │   └── rosetta.md
 └── scripts/              # Agent helper scripts (all stdlib-only)
     ├── chimerax_agent.py
+    ├── fetch_pdb.py
     ├── fetch_alphafold.py
     ├── pdb_info.py
+    ├── structure_info.py
+    ├── uniprot_lookup.py
     └── pymol_agent.py
 ```
 
@@ -97,7 +110,7 @@ The tool split is deliberate:
 
 - **PyMOL** is the default for headless image generation (software ray tracer — no display needed).
 - **ChimeraX** is the default for analysis-heavy workflows and GPU-rendered GUI sessions.
-- **AlphaFold DB** is a public upstream source, not a local model runtime.
+- **RCSB/UniProt/AlphaFold DB** provide lightweight upstream data discovery before local visualization.
 - **Rosetta/PyRosetta** are optional extensions. ML alternatives (ProteinMPNN, ESM2) are documented for when Rosetta isn't available.
 
 Helper scripts emit machine-readable JSON, with human-readable text as a fallback. Temporary handoff files are per-process, so parallel agent runs never collide.
