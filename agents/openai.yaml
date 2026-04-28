@@ -1,7 +1,7 @@
 interface:
   display_name: "Proteus"
   short_description: "Analyze and render protein structures"
-  default_prompt: "Use $proteus to inspect this structural biology task, choose the right local toolchain, and return a concise analysis plus any generated outputs."
+  default_prompt: "Use $proteus to run a readiness check when needed, resolve structure inputs to local files with provenance, choose the right structural biology toolchain, and return concise analysis plus any generated outputs."
 
 policy:
   allow_implicit_invocation: true

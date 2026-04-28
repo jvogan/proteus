@@ -20,6 +20,7 @@ import argparse
 import glob
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -56,23 +57,64 @@ def _parse_output(stdout: str) -> tuple[list[str], list[str]]:
     ChimeraX prefixes output with INFO:, WARNING:, ERROR:, STATUS:.
     Lines starting with 'INFO: Executing:' are echoed commands, not results.
     """
-    info_lines = []
-    errors = []
+    info_lines: list[str] = []
+    errors: list[str] = []
+    continuation: str | None = None
+
     for line in stdout.splitlines():
         stripped = line.strip()
-        if stripped.startswith("ERROR:"):
-            errors.append(stripped[6:].strip())
-        elif stripped.startswith("WARNING:"):
-            # Surface warnings — ChimeraX warns about missing atoms, format issues, etc.
-            info_lines.append(f"[WARNING] {stripped[8:].strip()}")
-        elif stripped.startswith("INFO:"):
-            content = stripped[5:].strip()
-            # Skip echoed commands
-            if content and not content.startswith("Executing:"):
+        if not stripped:
+            continue
+
+        prefix = None
+        content = stripped
+        for candidate in ("ERROR:", "WARNING:", "INFO:", "STATUS:"):
+            if stripped.startswith(candidate):
+                prefix = candidate[:-1]
+                content = stripped[len(candidate):].strip()
+                break
+
+        if prefix == "ERROR":
+            continuation = "error"
+            if content:
+                errors.append(content)
+        elif prefix == "WARNING":
+            continuation = "info"
+            if content:
+                info_lines.append(f"[WARNING] {content}")
+        elif prefix == "INFO":
+            if content.startswith("Executing:"):
+                continuation = None
+                continue
+            continuation = "info"
+            if content:
                 info_lines.append(content)
-        elif stripped.startswith("STATUS:"):
-            info_lines.append(stripped[7:].strip())
+        elif prefix == "STATUS":
+            continuation = "info"
+            if content:
+                info_lines.append(content)
+        elif stripped.startswith("Executing:"):
+            continuation = None
+        elif continuation == "error":
+            errors.append(stripped)
+        elif continuation == "info":
+            info_lines.append(stripped)
     return info_lines, errors
+
+
+def _quote_chimerax_value(value: str) -> str:
+    """Quote a value for ChimeraX command syntax."""
+    return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def _quote_path(path: str) -> str:
+    return _quote_chimerax_value(os.path.abspath(path))
+
+
+def _chain_spec(model_id: str, chain_id: str) -> str:
+    if not re.fullmatch(r"[A-Za-z0-9_.-]+", chain_id):
+        raise ValueError(f"Unsafe ChimeraX chain identifier: {chain_id!r}")
+    return f"{model_id}/{chain_id}"
 
 
 def _finalize_process_result(proc: subprocess.CompletedProcess, output_path: str) -> dict:
@@ -112,16 +154,16 @@ def _finalize_process_result(proc: subprocess.CompletedProcess, output_path: str
     return result
 
 
-def run_chimerax_commands(commands: str, timeout: int = 120) -> dict:
+def run_chimerax_command_list(cmd_list: list[str], timeout: int = 120) -> dict:
     """Run ChimeraX commands headlessly and capture output.
 
-    Commands are semicolon-separated. Analysis commands work in --nogui mode.
+    Analysis commands work in --nogui mode.
     Image rendering does NOT work in --nogui mode on macOS.
     """
     if not CHIMERAX:
         return {"status": "error", "error": "ChimeraX not found. Install it or set CHIMERAX_BIN."}
 
-    cmd_list = [c.strip() for c in commands.replace("\n", ";").split(";") if c.strip()]
+    cmd_list = [c.strip() for c in cmd_list if c.strip()]
     cmd_str = " ; ".join(cmd_list)
 
     try:
@@ -134,6 +176,7 @@ def run_chimerax_commands(commands: str, timeout: int = 120) -> dict:
         info_lines, errors = _parse_output(proc.stdout)
         result = {
             "status": "error" if errors else "ok",
+            "data": {"info": info_lines, "errors": errors if errors else None},
             "info": info_lines,
             "errors": errors if errors else None,
         }
@@ -148,6 +191,12 @@ def run_chimerax_commands(commands: str, timeout: int = 120) -> dict:
         return {"status": "error", "error": f"Timeout after {timeout}s"}
     except FileNotFoundError:
         return {"status": "error", "error": f"ChimeraX binary not found at {CHIMERAX}"}
+
+
+def run_chimerax_commands(commands: str, timeout: int = 120) -> dict:
+    """Run semicolon-separated ChimeraX commands headlessly and capture output."""
+    cmd_list = [c.strip() for c in commands.replace("\n", ";").split(";") if c.strip()]
+    return run_chimerax_command_list(cmd_list, timeout)
 
 
 def run_chimerax_python(script_content: str, timeout: int = 120) -> dict:
@@ -206,30 +255,41 @@ with open(_outpath, "w") as _f:
 
 def get_structure_info(pdb_path: str) -> dict:
     """Load a structure and return basic info via ChimeraX."""
-    abs_path = os.path.abspath(pdb_path)
-    commands = f"open {abs_path} ; info chains #1 ; info models #1"
-    return run_chimerax_commands(commands)
+    return run_chimerax_command_list([
+        f"open {_quote_path(pdb_path)}",
+        "info chains #1",
+        "info models #1",
+    ])
 
 
 def align_structures(pdb1: str, pdb2: str) -> dict:
     """Align two structures and return RMSD via matchmaker."""
-    abs1, abs2 = os.path.abspath(pdb1), os.path.abspath(pdb2)
-    commands = f"open {abs1} ; open {abs2} ; matchmaker #2 to #1"
-    return run_chimerax_commands(commands)
+    return run_chimerax_command_list([
+        f"open {_quote_path(pdb1)}",
+        f"open {_quote_path(pdb2)}",
+        "matchmaker #2 to #1",
+    ])
 
 
 def measure_sasa(pdb_path: str) -> dict:
     """Measure solvent-accessible surface area."""
-    abs_path = os.path.abspath(pdb_path)
-    commands = f"open {abs_path} ; measure sasa #1"
-    return run_chimerax_commands(commands)
+    return run_chimerax_command_list([
+        f"open {_quote_path(pdb_path)}",
+        "measure sasa #1",
+    ])
 
 
 def find_hbonds(pdb_path: str, chain1: str = "A", chain2: str = "B") -> dict:
     """Find hydrogen bonds between two chains."""
-    abs_path = os.path.abspath(pdb_path)
-    commands = f"open {abs_path} ; hbonds #1/{chain1} restrict #1/{chain2} log true"
-    return run_chimerax_commands(commands)
+    try:
+        chain1_spec = _chain_spec("#1", chain1)
+        chain2_spec = _chain_spec("#1", chain2)
+    except ValueError as exc:
+        return {"status": "error", "error": str(exc)}
+    return run_chimerax_command_list([
+        f"open {_quote_path(pdb_path)}",
+        f"hbonds {chain1_spec} restrict {chain2_spec} log true",
+    ])
 
 
 def main():

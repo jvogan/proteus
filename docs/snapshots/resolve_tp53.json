@@ -1,0 +1,15 @@
+{
+  "status": "ok",
+  "data": {
+    "resolved_kind": "name_or_gene",
+    "source": "AlphaFold DB",
+    "query": "TP53",
+    "uniprot_id": "P04637",
+    "model_id": "AF-P04637-F1",
+    "gene": "TP53",
+    "global_plddt": 75.06,
+    "latest_version": 6,
+    "structure_path": null,
+    "inspection": null
+  }
+}

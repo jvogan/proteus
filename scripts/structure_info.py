@@ -200,8 +200,7 @@ def _build_output(path: str, fmt: str, title: str | None, chains: set[str],
         for chain in sorted_chains
     }
     likely_alphafold = _is_likely_alphafold(path, b_factors, force_alphafold)
-    output = {
-        "status": "ok",
+    data = {
         "file": str(Path(path).resolve()),
         "format": fmt,
         "title": title or "(no title)",
@@ -213,7 +212,9 @@ def _build_output(path: str, fmt: str, title: str | None, chains: set[str],
         "likely_alphafold": likely_alphafold,
     }
     if likely_alphafold and b_factors:
-        output["plddt_distribution"] = _plddt_distribution(b_factors)
+        data["plddt_distribution"] = _plddt_distribution(b_factors)
+    output = {"status": "ok", "data": data}
+    output.update(data)
     return output
 
 

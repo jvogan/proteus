@@ -108,7 +108,7 @@ def cx_run(command: str, json_response: bool = True) -> dict:
         "json": "true" if json_response else "false",
     })
     url = f"{CHIMERAX_REST}/run?{params}"
-    with urllib.request.urlopen(url) as resp:
+    with urllib.request.urlopen(url, timeout=10) as resp:
         return json.loads(resp.read())
 ```
 
@@ -136,20 +136,34 @@ with a single-threaded event loop, not `threading.Thread`.
 ## Output Parsing
 
 ChimeraX prefixes stdout lines with `INFO:`, `WARNING:`, `ERROR:`, `STATUS:`.
+Some commands emit `INFO:` on one line and the useful text on following
+unprefixed continuation lines, so parsers must preserve continuation lines.
 
 ```python
 def parse_chimerax_output(stdout: str) -> list[str]:
     """Extract meaningful output lines from ChimeraX stdout."""
     results = []
-    for line in stdout.splitlines():
+    in_info = False
+    for raw in stdout.splitlines():
+        line = raw.strip()
+        if not line:
+            continue
         # Skip echoed commands
         if line.startswith("INFO: Executing:"):
+            in_info = False
             continue
-        # Strip known prefixes
-        for prefix in ["INFO: ", "STATUS: ", "WARNING: ", "ERROR: "]:
+        for prefix in ["INFO:", "STATUS:", "WARNING:", "ERROR:"]:
             if line.startswith(prefix):
-                results.append(line[len(prefix):])
+                in_info = prefix != "ERROR:"
+                text = line[len(prefix):].strip()
+                if text:
+                    results.append(text)
                 break
+        elif line.startswith("Executing:"):
+            in_info = False
+        else:
+            if in_info:
+                results.append(line)
     return results
 ```
 
@@ -192,13 +206,14 @@ ChimeraX uses a hierarchical specifier system, different from PyMOL:
 ### Opening structures
 ```
 open 1ubq from pdb               # Fetch from PDB
-open /path/to/file.pdb           # Local file (use absolute paths!)
+open "/path/to/file.pdb"         # Local file (use quoted absolute paths!)
 open P69905 from alphafold       # AlphaFold prediction
 open 21924 from emdb             # Cryo-EM density map
 ```
 
-**Always use absolute paths** for local files. ChimeraX's working directory
-when launched via subprocess may differ from yours.
+**Always use quoted absolute paths** for local files. ChimeraX's working
+directory when launched via subprocess may differ from yours, and unquoted paths
+with spaces or semicolons can break command parsing.
 
 ### Visualization
 ```
@@ -329,27 +344,29 @@ def get_model_id(name_fragment: str, model_type: str = "AtomicStructure") -> str
 
 ### Clean restart pattern
 
-When you need guaranteed clean model IDs (starting from #1):
+When you need guaranteed clean model IDs (starting from #1), restart only a
+ChimeraX process you launched for this workflow. Do not use broad commands such
+as `pkill -f ChimeraX`; that can terminate unrelated user sessions.
 
 ```python
 import subprocess, time
 
 def restart_chimerax_with_rest(port=50888):
     """Kill and restart ChimeraX with clean model IDs."""
-    subprocess.run(["pkill", "-f", "ChimeraX"], capture_output=True)
-    time.sleep(2)
-    subprocess.Popen([CHIMERAX, "--cmd", f"remotecontrol rest start port {port}"])
+    proc = subprocess.Popen([CHIMERAX, "--cmd", f"remotecontrol rest start port {port}"])
     # Poll until REST responds
     for _ in range(30):
         try:
             cx_run("version")
-            return True
+            return proc
         except Exception:
             time.sleep(1)
-    return False
+    proc.terminate()
+    raise RuntimeError("ChimeraX REST did not start")
 ```
 
-On Windows, replace `pkill` with `taskkill /f /im ChimeraX.exe`.
+Keep the returned `proc` handle and terminate that process when the workflow is
+done if you started it only for automation.
 
 ### Avoid closing models mid-session
 

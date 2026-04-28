@@ -37,14 +37,14 @@ def parse_pdb(path: str, as_json: bool = False, force_alphafold: bool = False):
     except FileNotFoundError:
         msg = f"File not found: {path}"
         if as_json:
-            print(json.dumps({"error": msg}))
+            print(json.dumps({"status": "error", "error": msg}))
         else:
             print(f"ERROR: {msg}", file=sys.stderr)
         sys.exit(1)
     except PermissionError:
         msg = f"Permission denied: {path}"
         if as_json:
-            print(json.dumps({"error": msg}))
+            print(json.dumps({"status": "error", "error": msg}))
         else:
             print(f"ERROR: {msg}", file=sys.stderr)
         sys.exit(1)
@@ -107,7 +107,7 @@ def parse_pdb(path: str, as_json: bool = False, force_alphafold: bool = False):
         chain_info[ch] = {"residues": aa_count}
 
     if as_json:
-        output = {
+        data = {
             "file": path,
             "title": title,
             "chains": sorted_chains,
@@ -118,7 +118,9 @@ def parse_pdb(path: str, as_json: bool = False, force_alphafold: bool = False):
             "likely_alphafold": is_alphafold,
         }
         if is_alphafold:
-            output["plddt_distribution"] = plddt_bins
+            data["plddt_distribution"] = plddt_bins
+        output = {"status": "ok", "data": data}
+        output.update(data)
         print(json.dumps(output, indent=2))
     else:
         print(f"File: {path}")

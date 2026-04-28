@@ -7,6 +7,7 @@ ligand ID, or asks for "the experimental structure" rather than a local file.
 
 | User gives... | First action | Tool/script |
 |---|---|---|
+| Ambiguous query | Resolve to the best structure source | `scripts/resolve_structure.py` |
 | PDB ID, e.g. `4HHB` | Download experimental coordinates and metadata | `scripts/fetch_pdb.py` |
 | Protein/gene name, e.g. `p53` | Resolve to UniProt accession first | `scripts/uniprot_lookup.py` |
 | UniProt accession, e.g. `P04637` | Fetch AlphaFold prediction | `scripts/fetch_alphafold.py` |
@@ -43,8 +44,8 @@ Best for resolving natural-language proteins and gene symbols to accessions.
 Common agent path:
 
 ```bash
-python scripts/uniprot_lookup.py TP53 --gene-exact --json
-python scripts/fetch_alphafold.py P04637 --pae --json
+python3 scripts/uniprot_lookup.py TP53 --gene-exact --json
+python3 scripts/fetch_alphafold.py P04637 --pae --json
 ```
 
 Default lookup filters to reviewed human UniProtKB entries (`organism_id:9606`).
@@ -69,3 +70,11 @@ residue mappings, and quality information. Prefer PDBe when the task asks for:
 - aggregated views across many PDB entries
 
 Keep PDBe calls targeted. Do not bulk-download data unless the user asks.
+
+## Validation
+
+RCSB exposes wwPDB validation summaries through the Data API. Use
+`scripts/validation_report.py` when selecting between experimental structures or
+when a user asks whether a structure is trustworthy. It reports geometry summary
+fields such as clashscore, bond/angle RMSZ, Ramachandran outliers, and rotamer
+outliers when available.

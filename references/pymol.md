@@ -78,7 +78,7 @@ except Exception as e:
     _output["status"] = "error"
     _output["error"] = str(e)
 finally:
-    with open("{output_path}", "w") as _f:
+    with open({output_path!r}, "w") as _f:
         json.dump(_output, _f, indent=2, default=str)
     try:
         cmd.quit()
@@ -106,6 +106,10 @@ mixed with PyMOL's own diagnostic output. Writing to a temp JSON file and
 reading it back from the calling process is the only reliable method.
 
 Always call `cmd.quit()` at the end — without it, the PyMOL process hangs.
+
+When generating PyMOL Python scripts from agent inputs, use `repr()` or
+`json.dumps()` for file paths and user strings before embedding them in source.
+Do not interpolate raw paths, colors, or selections into quoted Python strings.
 
 ## Selection Algebra
 

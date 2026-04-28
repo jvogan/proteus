@@ -6,17 +6,40 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/)
+[![CI](https://github.com/jvogan/proteus/actions/workflows/ci.yml/badge.svg)](https://github.com/jvogan/proteus/actions/workflows/ci.yml)
 
-Proteus is a **skill** for AI coding agents — a drop-in knowledge pack that teaches [Claude Code](https://docs.anthropic.com/en/docs/claude-code), [Codex](https://openai.com/index/codex/), and similar agents how to drive structural biology tools from the terminal.
+**Structural biology superpowers for AI coding agents.**
 
-It covers PyMOL, ChimeraX, AlphaFold DB, and Rosetta/PyRosetta: when to use which tool, how to call them headlessly, and the undocumented gotchas that otherwise cost hours of debugging.
-It also includes lightweight RCSB PDB and UniProt helpers so agents can resolve names like `TP53` or IDs like `4HHB` into local coordinate files.
+Proteus is a structural biology agent skill and stdlib-only helper toolkit for
+[Codex](https://openai.com/index/codex/), [Claude Code](https://docs.anthropic.com/en/docs/claude-code),
+and other AI coding agents. It teaches agents how to do AI protein structure
+analysis from the terminal: resolve proteins, fetch structures, inspect
+AlphaFold confidence, render PyMOL figures, automate ChimeraX analysis, compare
+models, validate experimental structures, and reason about protein design
+tooling.
 
-Named after the shape-shifting Greek god — and after the root of the word *protein*.
+Proteus is for computational biologists, protein engineers, educators, and
+agent builders who want reliable PyMOL automation, ChimeraX automation,
+AlphaFold DB / pLDDT / PAE workflows, RCSB PDB and UniProt helpers, and
+Rosetta-oriented protein design guidance without building a custom plugin.
 
 > **What is a skill?** A skill is a directory that an AI coding agent reads to gain domain-specific knowledge. Clone it into the agent's skills folder and it becomes part of the agent's working context — no code changes or plugin installs required.
 
-## What it provides
+## Why Proteus?
+
+- **Turns vague protein prompts into reproducible workflows.** `TP53`, `P04637`,
+  `4HHB`, and local `.pdb` / `.cif` files become local structures with provenance.
+- **Keeps agents out of known tool traps.** Proteus documents hard-won PyMOL,
+  ChimeraX, and AlphaFold DB gotchas that otherwise waste hours.
+- **Works even before heavy tools are installed.** Zero-dependency scripts inspect
+  PDB/mmCIF files, query public APIs, and emit structured JSON.
+- **Scales up when PyMOL or ChimeraX are available.** Agents can render
+  publication-quality PyMOL images or run ChimeraX SASA, H-bond, alignment, and
+  cryo-EM workflows.
+- **Produces outputs agents can chain.** Reports use machine-readable JSON for
+  parallel runs, CI checks, notebooks, and downstream analysis.
+
+## What It Provides
 
 - **17 documented gotchas** for PyMOL, ChimeraX, and AlphaFold DB — hard-won from real debugging
 - Tool detection for PyMOL and ChimeraX across macOS and Linux installs
@@ -26,9 +49,50 @@ Named after the shape-shifting Greek god — and after the root of the word *pro
 - RCSB PDB fetch for experimental coordinates, metadata, and biological assembly mmCIF
 - UniProt lookup for resolving gene/protein names before AlphaFold fetches
 - PDB/mmCIF inspection via `structure_info.py`
+- One-command readiness checks via `proteus_doctor.py`
+- Query resolution via `resolve_structure.py` for local files, PDB IDs, UniProt accessions, and gene/protein names
+- PAE, validation, ligand-pocket, and structure-comparison reports
 - Rosetta/PyRosetta patterns plus ML alternatives (ProteinMPNN, ESM2)
 - Zero-dependency PDB file inspector (`pdb_info.py` — stdlib only)
 - Structured JSON output from all helper scripts, safe for parallel agent runs
+
+## Agent Prompts That Work
+
+Use prompts like these with `$proteus` or after installing this directory as an
+agent skill:
+
+```text
+Use Proteus to resolve TP53, fetch the AlphaFold prediction, and summarize low-confidence regions.
+Render the 1HSG binding pocket around indinavir in PyMOL and save a clean PNG.
+Compare AF-P04637-F1 against an experimental p53 structure and report RMSD plus high-deviation residues.
+Run a ChimeraX hydrogen-bond and SASA analysis for this protein-protein interface.
+Check whether 4HHB has validation red flags before using it as a reference structure.
+```
+
+## Capabilities Matrix
+
+| Capability | No local tools | PyMOL | ChimeraX | Public APIs | Rosetta/PyRosetta |
+|---|---:|---:|---:|---:|---:|
+| PDB/mmCIF inspection | yes | optional | optional | no | no |
+| Protein/name resolution | yes | no | no | UniProt | no |
+| Experimental structure fetch | yes | no | no | RCSB PDB | no |
+| AlphaFold confidence, pLDDT, PAE | yes | render optional | optional | AlphaFold DB | no |
+| Headless structure rendering | no | yes | limited | no | no |
+| SASA, H-bonds, contacts, alignment | partial | partial | yes | no | optional |
+| Protein design/scoring guidance | docs | optional | optional | optional | yes |
+
+## Generated Outputs
+
+Small, checked-in snapshots show the JSON shape without requiring downloads:
+
+- [`resolve_structure.py TP53 --no-download --json`](docs/snapshots/resolve_tp53.json)
+- [`pae_report.py tests/fixtures/tiny_pae.json --json`](docs/snapshots/pae_tiny.json)
+- [`validation_report.py 4HHB --json`](docs/snapshots/validation_4hhb.json)
+- [`pocket_report.py tests/fixtures/tiny.pdb --json`](docs/snapshots/pocket_tiny.json)
+
+The repository also includes a curated social preview image at
+[`assets/social-preview.jpg`](assets/social-preview.jpg). The larger generated
+banner gallery stays ignored to keep the public repository lean.
 
 ## Install
 
@@ -76,6 +140,10 @@ python3 scripts/structure_info.py structure.cif --json             # PDB/mmCIF i
 python3 scripts/fetch_pdb.py 4HHB --json                           # RCSB PDB fetch
 python3 scripts/uniprot_lookup.py TP53 --gene-exact --json         # UniProt lookup
 python3 scripts/fetch_alphafold.py P04637 --pae --json             # AlphaFold fetch
+python3 scripts/pae_report.py AF-P04637-F1_pae.json --json         # PAE/domain hints
+python3 scripts/validation_report.py 4HHB --json                   # wwPDB validation metrics
+python3 scripts/pocket_report.py 1HSG --json                       # ligand-pocket contacts
+python3 scripts/resolve_structure.py TP53 --json                   # one-command resolver
 python3 scripts/pymol_agent.py render structure.pdb output.png     # headless render
 python3 scripts/chimerax_agent.py align reference.pdb mobile.pdb   # structure alignment
 ```
@@ -96,11 +164,17 @@ proteus/
 │   └── rosetta.md
 └── scripts/              # Agent helper scripts (all stdlib-only)
     ├── chimerax_agent.py
+    ├── compare_structures.py
     ├── fetch_pdb.py
     ├── fetch_alphafold.py
+    ├── pae_report.py
     ├── pdb_info.py
+    ├── pocket_report.py
+    ├── proteus_doctor.py
+    ├── resolve_structure.py
     ├── structure_info.py
     ├── uniprot_lookup.py
+    ├── validation_report.py
     └── pymol_agent.py
 ```
 
@@ -115,9 +189,27 @@ The tool split is deliberate:
 
 Helper scripts emit machine-readable JSON, with human-readable text as a fallback. Temporary handoff files are per-process, so parallel agent runs never collide.
 
+## Test
+
+```bash
+make test
+```
+
+## Safety And Privacy
+
+Proteus does not include telemetry or credential collection. Some workflows call
+public APIs with user-provided protein names, UniProt accessions, or PDB IDs.
+Read [PRIVACY.md](PRIVACY.md), [SECURITY.md](SECURITY.md), and
+[DISCLAIMER.md](DISCLAIMER.md) before using Proteus with private structures,
+unpublished sequences, or regulated data.
+
 ## Contributing
 
-Found a gotcha that isn't documented? Have a workflow that should be covered? [Open an issue](https://github.com/jvogan/proteus/issues) or submit a PR. The most valuable contributions are real debugging discoveries — the kind of thing that takes hours to figure out and one sentence to explain.
+Found a gotcha that isn't documented? Have a workflow that should be covered?
+[Open an issue](https://github.com/jvogan/proteus/issues) or submit a PR. The
+most valuable contributions are real debugging discoveries — the kind of thing
+that takes hours to figure out and one sentence to explain. See
+[CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 

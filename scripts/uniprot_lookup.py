@@ -14,11 +14,26 @@ import argparse
 import json
 import re
 import sys
+import urllib.error
 import urllib.parse
 import urllib.request
 
 UNIPROT_SEARCH = "https://rest.uniprot.org/uniprotkb/search"
 DEFAULT_FIELDS = "accession,id,protein_name,gene_names,organism_name,reviewed,length"
+
+
+class UniProtLookupError(RuntimeError):
+    pass
+
+
+def _error_payload(message: str) -> dict:
+    return {"status": "error", "error": message}
+
+
+def _ok_payload(data: dict) -> dict:
+    output = {"status": "ok", "data": data}
+    output.update(data)
+    return output
 
 
 def _looks_like_accession(query: str) -> bool:
@@ -90,8 +105,14 @@ def search_uniprot(query: str, size: int) -> list[dict]:
         "fields": DEFAULT_FIELDS,
     })
     url = f"{UNIPROT_SEARCH}?{params}"
-    with urllib.request.urlopen(url, timeout=30) as response:
-        data = json.load(response)
+    request = urllib.request.Request(url, headers={"User-Agent": "proteus-skill/1.0"})
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            data = json.load(response)
+    except urllib.error.HTTPError as exc:
+        raise UniProtLookupError(f"UniProt returned HTTP {exc.code}: {exc.reason}") from exc
+    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
+        raise UniProtLookupError(f"Failed to query UniProt: {exc}") from exc
     return [normalize_entry(entry) for entry in data.get("results", [])]
 
 
@@ -118,14 +139,21 @@ def main():
 
     organism = None if args.all_organisms else args.organism
     query = build_query(args.query, organism, not args.include_unreviewed, args.gene_exact)
-    results = search_uniprot(query, args.size)
+    try:
+        results = search_uniprot(query, args.size)
+    except UniProtLookupError as exc:
+        if args.json:
+            print(json.dumps(_error_payload(str(exc)), indent=2))
+        else:
+            print(f"ERROR: {exc}", file=sys.stderr)
+        sys.exit(1)
 
-    output = {
-        "status": "ok",
+    data = {
         "query": args.query,
         "uniprot_query": query,
         "results": results,
     }
+    output = _ok_payload(data)
 
     if args.json:
         print(json.dumps(output, indent=2))

@@ -1,0 +1,17 @@
+{
+  "status": "ok",
+  "data": {
+    "size": {
+      "rows": 4,
+      "columns": 4
+    },
+    "pae": {
+      "min": 1.0,
+      "max": 21.0,
+      "mean": 10.75
+    },
+    "flexible_or_uncertain_regions": [],
+    "rigid_candidate_regions": [],
+    "per_residue_mean_pae": [11.0, 10.5, 10.5, 11.0]
+  }
+}

@@ -48,15 +48,19 @@ curl -sL "https://alphafold.ebi.ac.uk/files/AF-P69905-F1-predicted_aligned_error
 ### Programmatic fetch (Python, stdlib only)
 
 ```python
-import urllib.request, json, os
+import json
+import os
+import urllib.error
+import urllib.request
 
 def fetch_alphafold(uniprot_id: str, output_dir: str = ".", include_pae: bool = False):
     """Fetch AlphaFold prediction by UniProt ID. No dependencies."""
 
     # Step 1: Get metadata (ALWAYS do this to get correct version)
     api_url = f"https://alphafold.ebi.ac.uk/api/prediction/{uniprot_id}"
-    with urllib.request.urlopen(api_url) as resp:
-        data = json.loads(resp.read())
+    request = urllib.request.Request(api_url, headers={"User-Agent": "proteus-skill/1.0"})
+    with urllib.request.urlopen(request, timeout=30) as resp:
+        data = json.load(resp)
 
     # GOTCHA: API returns a list, not a dict
     entry = data[0] if isinstance(data, list) else data
@@ -68,7 +72,10 @@ def fetch_alphafold(uniprot_id: str, output_dir: str = ".", include_pae: bool = 
     # Step 2: Download structure
     pdb_url = entry["pdbUrl"]
     pdb_path = os.path.join(output_dir, f"{model_id}.pdb")
-    urllib.request.urlretrieve(pdb_url, pdb_path)
+    download_request = urllib.request.Request(pdb_url, headers={"User-Agent": "proteus-skill/1.0"})
+    with urllib.request.urlopen(download_request, timeout=60) as resp:
+        with open(pdb_path, "wb") as out:
+            out.write(resp.read())
 
     # Step 3: Download PAE if requested
     pae_path = None
@@ -76,7 +83,10 @@ def fetch_alphafold(uniprot_id: str, output_dir: str = ".", include_pae: bool = 
         pae_url = entry.get("paeDocUrl")
         if pae_url:
             pae_path = os.path.join(output_dir, f"{model_id}_pae.json")
-            urllib.request.urlretrieve(pae_url, pae_path)
+            pae_request = urllib.request.Request(pae_url, headers={"User-Agent": "proteus-skill/1.0"})
+            with urllib.request.urlopen(pae_request, timeout=60) as resp:
+                with open(pae_path, "wb") as out:
+                    out.write(resp.read())
 
     # Step 4: Report confidence stats
     stats = {
@@ -94,12 +104,15 @@ def fetch_alphafold(uniprot_id: str, output_dir: str = ".", include_pae: bool = 
     return stats
 ```
 
+For agent workflows, prefer `scripts/fetch_alphafold.py`; it wraps these calls
+with parseable JSON errors and normalized output.
+
 ### Using the bundled script
 
 ```bash
-python scripts/fetch_alphafold.py P04637           # Fetch p53
-python scripts/fetch_alphafold.py P69905 --pae     # Fetch hemoglobin with PAE
-python scripts/fetch_alphafold.py P04637 --outdir ./data      # Custom output dir
+python3 scripts/fetch_alphafold.py P04637           # Fetch p53
+python3 scripts/fetch_alphafold.py P69905 --pae     # Fetch hemoglobin with PAE
+python3 scripts/fetch_alphafold.py P04637 --outdir ./data      # Custom output dir
 ```
 
 ## Understanding the Output
@@ -280,9 +293,11 @@ monomer. The commonly cited ubiquitin ID **P62988 is NOT in the AlphaFold DB**.
 4. **`paeDocUrl` may be missing.** Not all entries have PAE data. Always use
    `.get("paeDocUrl")` with a fallback.
 
-5. **AlphaFold 3 has no public API** (as of 2026). AF3 predictions for
-   complexes are only available through the AlphaFold Server web interface
-   with limited runs per user.
+5. **AlphaFold 3 has no public hosted API** (as of 2026). For quick hosted
+   predictions, use AlphaFold Server in the browser. DeepMind also provides
+   a local Docker-based AlphaFold 3 inference pipeline that reads JSON input,
+   but it requires a suitable environment, databases, and model parameters
+   under their terms. Do not assume it is installed; detect it first.
 
 6. **B-factor column interpretation.** In AlphaFold PDB files, the B-factor
    column contains pLDDT (0-100), not actual thermal displacement. Don't

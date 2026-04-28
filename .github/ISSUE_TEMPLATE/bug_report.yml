@@ -1,0 +1,43 @@
+name: Bug report
+description: Report a reproducible Proteus issue.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What went wrong?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction
+      description: Include the command, input type, and relevant output.
+      placeholder: |
+        python3 scripts/structure_info.py file.cif --json
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - PyMOL
+        - ChimeraX
+        - AlphaFold DB
+        - RCSB PDB
+        - UniProt
+        - Rosetta / protein design
+        - Docs
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, Python version, and installed structural biology tools.
+      placeholder: |
+        macOS 15, Python 3.12, PyMOL installed, ChimeraX not installed

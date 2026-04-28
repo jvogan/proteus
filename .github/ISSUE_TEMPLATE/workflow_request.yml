@@ -1,0 +1,32 @@
+name: Workflow request
+description: Request a new structural biology agent workflow or gotcha.
+title: "[Workflow]: "
+labels: ["enhancement", "workflow"]
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: What should an AI agent be able to do?
+      placeholder: "Analyze a protein-ligand pocket and render the binding site."
+    validations:
+      required: true
+  - type: textarea
+    id: inputs
+    attributes:
+      label: Inputs
+      description: What files, IDs, or natural-language prompts should this handle?
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Expected output
+      description: JSON report, rendered image, saved structure, or docs?
+    validations:
+      required: true
+  - type: textarea
+    id: gotchas
+    attributes:
+      label: Known gotchas
+      description: Any tool-specific details, failures, or edge cases already known?

@@ -89,19 +89,25 @@ Load reference files on demand — don't read all of them upfront:
 
 These scripts handle the hard parts of tool communication.
 
-**IMPORTANT: Always run `python scripts/<script>.py --help` first.** Treat the
+**IMPORTANT: Always run `python3 scripts/<script>.py --help` first.** Treat the
 scripts as black-box utilities by default. Only read the source when you are
 debugging, patching, or the help text is insufficient for the task.
 
 | Script | Purpose | Example |
 |---|---|---|
-| `scripts/fetch_pdb.py` | RCSB PDB metadata + coordinate fetcher | `python scripts/fetch_pdb.py 4HHB --json` |
-| `scripts/uniprot_lookup.py` | Protein/gene name to UniProt accession | `python scripts/uniprot_lookup.py TP53 --gene-exact --json` |
-| `scripts/structure_info.py` | Zero-dep PDB/mmCIF inspector | `python scripts/structure_info.py structure.cif --json` |
-| `scripts/pymol_agent.py` | Headless PyMOL driver | `python scripts/pymol_agent.py info structure.pdb` |
-| `scripts/chimerax_agent.py` | Headless ChimeraX driver | `python scripts/chimerax_agent.py run "open 1ubq; info chains #1"` |
-| `scripts/fetch_alphafold.py` | AlphaFold DB fetcher | `python scripts/fetch_alphafold.py P04637 --pae` |
-| `scripts/pdb_info.py` | Legacy zero-dep PDB inspector (PDB only) | `python scripts/pdb_info.py structure.pdb` |
+| `scripts/proteus_doctor.py` | Local readiness report for tools, scripts, and APIs | `python3 scripts/proteus_doctor.py --network --json` |
+| `scripts/resolve_structure.py` | Resolve file/PDB/UniProt/name to structure + provenance | `python3 scripts/resolve_structure.py TP53 --json` |
+| `scripts/fetch_pdb.py` | RCSB PDB metadata + coordinate fetcher | `python3 scripts/fetch_pdb.py 4HHB --json` |
+| `scripts/uniprot_lookup.py` | Protein/gene name to UniProt accession | `python3 scripts/uniprot_lookup.py TP53 --gene-exact --json` |
+| `scripts/structure_info.py` | Zero-dep PDB/mmCIF inspector | `python3 scripts/structure_info.py structure.cif --json` |
+| `scripts/fetch_alphafold.py` | AlphaFold DB fetcher | `python3 scripts/fetch_alphafold.py P04637 --pae --json` |
+| `scripts/pae_report.py` | Summarize AlphaFold PAE domain/flexibility hints | `python3 scripts/pae_report.py AF-P04637-F1_pae.json --json` |
+| `scripts/validation_report.py` | Fetch wwPDB/RCSB validation quality metrics | `python3 scripts/validation_report.py 4HHB --json` |
+| `scripts/pocket_report.py` | Zero-dep ligand pocket contacts from PDB/PDB ID | `python3 scripts/pocket_report.py 1HSG --json` |
+| `scripts/compare_structures.py` | PyMOL CE alignment + optional per-residue deviations | `python3 scripts/compare_structures.py ref.pdb mobile.pdb --json` |
+| `scripts/pymol_agent.py` | Headless PyMOL driver | `python3 scripts/pymol_agent.py info structure.pdb` |
+| `scripts/chimerax_agent.py` | Headless ChimeraX driver | `python3 scripts/chimerax_agent.py run "open 1ubq; info chains #1"` |
+| `scripts/pdb_info.py` | Legacy zero-dep PDB inspector (PDB only) | `python3 scripts/pdb_info.py structure.pdb` |
 
 ## Critical Gotchas (Read This First)
 
@@ -202,24 +208,25 @@ can skip by knowing them upfront.
 
 ### Quick Structure Inspection
 ```bash
-python scripts/structure_info.py structure.cif --json  # zero-dep PDB/mmCIF overview
-python scripts/pdb_info.py structure.pdb               # legacy PDB-only overview
-python scripts/pymol_agent.py info structure.pdb        # detailed with PyMOL
+python3 scripts/structure_info.py structure.cif --json  # zero-dep PDB/mmCIF overview
+python3 scripts/pdb_info.py structure.pdb               # legacy PDB-only overview
+python3 scripts/pymol_agent.py info structure.pdb       # detailed with PyMOL
 ```
 
 ### Experimental Structure Fetch
 ```bash
-python scripts/fetch_pdb.py 4HHB --json                 # RCSB metadata + mmCIF
-python scripts/fetch_pdb.py 1HSG --format pdb           # legacy PDB format if needed
-python scripts/fetch_pdb.py 4HHB --assembly 1 --json    # biological assembly mmCIF
+python3 scripts/fetch_pdb.py 4HHB --json                # RCSB metadata + mmCIF
+python3 scripts/fetch_pdb.py 1HSG --format pdb          # legacy PDB format if needed
+python3 scripts/fetch_pdb.py 4HHB --assembly 1 --json   # biological assembly mmCIF
 ```
 
 ### AlphaFold Confidence Analysis
 ```bash
-python scripts/uniprot_lookup.py TP53 --gene-exact --json  # resolve accession if needed
-python scripts/fetch_alphafold.py P04637 --pae     # fetch p53 prediction
+python3 scripts/uniprot_lookup.py TP53 --gene-exact --json  # resolve accession if needed
+python3 scripts/fetch_alphafold.py P04637 --pae --json       # fetch p53 prediction
 # Output filename uses modelEntityId from API, typically AF-{UNIPROT}-F1.pdb
-python scripts/pymol_agent.py render AF-P04637-F1.pdb output.png
+python3 scripts/pae_report.py AF-P04637-F1_pae.json --json   # summarize domain uncertainty
+python3 scripts/pymol_agent.py render AF-P04637-F1.pdb output.png
 ```
 Then color by pLDDT bins — see `references/alphafold.md` for the standard color scheme.
 
@@ -282,9 +289,10 @@ png output.png
 ## Output Pattern
 
 When running analysis, always produce structured output. The agent scripts
-return JSON with `{"status": "ok", "data": {...}}` or `{"status": "error", "error": "..."}`.
-Their temporary files are per-invocation, so they are safe to call in parallel
-within the same workspace.
+return JSON with `{"status": "ok", "data": {...}}` or `{"status": "error", "error": "..."}` in
+`--json` mode. Many scripts also mirror key fields at top level for backward
+compatibility, but agents should read `data` first. Their temporary files are
+per-invocation, so they are safe to call in parallel within the same workspace.
 
 For multi-step workflows, write a summary JSON report at the end with:
 - Input files and parameters
@@ -306,18 +314,24 @@ For multi-step workflows, write a summary JSON report at the end with:
 
 | I want to... | Do this |
 |---|---|
-| Resolve protein/gene name to UniProt | `python scripts/uniprot_lookup.py TP53 --gene-exact --json` |
-| Fetch an experimental PDB structure | `python scripts/fetch_pdb.py 4HHB --json` |
-| Inspect PDB/mmCIF file (no tools needed) | `python scripts/structure_info.py file.cif --json` |
-| Inspect a legacy PDB file | `python scripts/pdb_info.py file.pdb` |
-| Get structure info via PyMOL | `python scripts/pymol_agent.py info file.pdb` |
-| Render a structure headless | `python scripts/pymol_agent.py render file.pdb out.png` |
-| Fetch an AlphaFold prediction | `python scripts/fetch_alphafold.py UNIPROT_ID --pae` |
-| Align two structures (ChimeraX) | `python scripts/chimerax_agent.py align ref.pdb mobile.pdb` |
-| Measure SASA | `python scripts/chimerax_agent.py sasa file.pdb` |
-| Find H-bonds between chains | `python scripts/chimerax_agent.py hbonds file.pdb --chain1 A --chain2 B` |
-| Run arbitrary PyMOL commands | `python scripts/pymol_agent.py run "fetch 1ubq; show cartoon"` |
-| Run arbitrary ChimeraX commands | `python scripts/chimerax_agent.py run "open 1ubq; info chains #1"` |
+| Check machine readiness | `python3 scripts/proteus_doctor.py --network --json` |
+| Resolve any common structure query | `python3 scripts/resolve_structure.py TP53 --json` |
+| Resolve protein/gene name to UniProt | `python3 scripts/uniprot_lookup.py TP53 --gene-exact --json` |
+| Fetch an experimental PDB structure | `python3 scripts/fetch_pdb.py 4HHB --json` |
+| Inspect PDB/mmCIF file (no tools needed) | `python3 scripts/structure_info.py file.cif --json` |
+| Inspect a legacy PDB file | `python3 scripts/pdb_info.py file.pdb` |
+| Summarize AlphaFold PAE | `python3 scripts/pae_report.py AF-P04637-F1_pae.json --json` |
+| Fetch validation metrics | `python3 scripts/validation_report.py 4HHB --json` |
+| Report ligand pocket contacts | `python3 scripts/pocket_report.py 1HSG --json` |
+| Compare two structures | `python3 scripts/compare_structures.py ref.pdb mobile.pdb --per-residue --json` |
+| Get structure info via PyMOL | `python3 scripts/pymol_agent.py info file.pdb` |
+| Render a structure headless | `python3 scripts/pymol_agent.py render file.pdb out.png` |
+| Fetch an AlphaFold prediction | `python3 scripts/fetch_alphafold.py UNIPROT_ID --pae --json` |
+| Align two structures (ChimeraX) | `python3 scripts/chimerax_agent.py align ref.pdb mobile.pdb` |
+| Measure SASA | `python3 scripts/chimerax_agent.py sasa file.pdb` |
+| Find H-bonds between chains | `python3 scripts/chimerax_agent.py hbonds file.pdb --chain1 A --chain2 B` |
+| Run arbitrary PyMOL commands | `python3 scripts/pymol_agent.py run "fetch 1ubq; show cartoon"` |
+| Run arbitrary ChimeraX commands | `python3 scripts/chimerax_agent.py run "open 1ubq; info chains #1"` |
 | Control ChimeraX GUI via REST | Read `references/chimerax.md` — REST API section |
 | Color by AlphaFold confidence | Read `references/alphafold.md` — pLDDT Coloring section |
 | Choose between PDB, mmCIF, SDF, MRC | Read `references/file-formats.md` |

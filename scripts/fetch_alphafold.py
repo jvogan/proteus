@@ -19,6 +19,21 @@ import urllib.request
 from pathlib import Path
 
 API_BASE = "https://alphafold.ebi.ac.uk/api/prediction"
+DEFAULT_TIMEOUT = 30
+
+
+class AlphaFoldFetchError(RuntimeError):
+    pass
+
+
+def _error_payload(message: str) -> dict:
+    return {"status": "error", "error": message}
+
+
+def _ok_payload(data: dict) -> dict:
+    output = {"status": "ok", "data": data}
+    output.update(data)
+    return output
 
 
 def fetch_metadata(uniprot_id: str) -> dict:
@@ -29,18 +44,22 @@ def fetch_metadata(uniprot_id: str) -> dict:
     """
     url = f"{API_BASE}/{uniprot_id}"
     try:
-        with urllib.request.urlopen(url) as resp:
+        request = urllib.request.Request(url, headers={"User-Agent": "proteus-skill/1.0"})
+        with urllib.request.urlopen(request, timeout=DEFAULT_TIMEOUT) as resp:
             data = json.loads(resp.read())
     except urllib.error.HTTPError as e:
         if e.code == 404:
-            print(f"ERROR: UniProt ID '{uniprot_id}' not found in AlphaFold DB.", file=sys.stderr)
-            print("  Common issue: P62988 (ubiquitin) is not in the DB. Use P0CG48 instead.", file=sys.stderr)
-            sys.exit(1)
-        raise
+            raise AlphaFoldFetchError(
+                f"UniProt ID '{uniprot_id}' not found in AlphaFold DB. "
+                "Common issue: P62988 (ubiquitin) is not in the DB; use P0CG48 instead."
+            ) from e
+        raise AlphaFoldFetchError(f"AlphaFold API returned HTTP {e.code}: {e.reason}") from e
+    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as e:
+        raise AlphaFoldFetchError(f"Failed to fetch AlphaFold metadata for '{uniprot_id}': {e}") from e
     # API returns a list — unwrap
     if isinstance(data, list):
         if not data:
-            raise RuntimeError(f"No AlphaFold entries returned for '{uniprot_id}'.")
+            raise AlphaFoldFetchError(f"No AlphaFold entries returned for '{uniprot_id}'.")
         return data[0]
     return data
 
@@ -54,7 +73,17 @@ def log(message: str, *, as_json: bool = False):
 def download(url: str, dest: Path, *, as_json: bool = False):
     """Download a file from URL to local path."""
     log(f"  Downloading {dest.name}...", as_json=as_json)
-    urllib.request.urlretrieve(url, dest)
+    request = urllib.request.Request(url, headers={"User-Agent": "proteus-skill/1.0"})
+    try:
+        with urllib.request.urlopen(request, timeout=60) as response:
+            with dest.open("wb") as handle:
+                while True:
+                    chunk = response.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    handle.write(chunk)
+    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, OSError) as e:
+        raise AlphaFoldFetchError(f"Failed to download {url}: {e}") from e
     log(f"  -> {dest.resolve()} ({dest.stat().st_size:,} bytes)", as_json=as_json)
 
 
@@ -76,6 +105,30 @@ def main():
     parser.add_argument("--outdir", default=".", help="Output directory (default: current)")
     parser.add_argument("--json", action="store_true", help="Output metadata as JSON to stdout")
     args = parser.parse_args()
+    try:
+        output = run(args)
+    except AlphaFoldFetchError as exc:
+        if args.json:
+            print(json.dumps(_error_payload(str(exc)), indent=2))
+        else:
+            print(f"ERROR: {exc}", file=sys.stderr)
+        sys.exit(1)
+    except KeyError as exc:
+        message = f"AlphaFold metadata response missing expected field: {exc}"
+        if args.json:
+            print(json.dumps(_error_payload(message), indent=2))
+        else:
+            print(f"ERROR: {message}", file=sys.stderr)
+        sys.exit(1)
+
+    if args.json:
+        print(json.dumps(output, indent=2))
+    else:
+        print("Done.")
+
+
+def run(args: argparse.Namespace) -> dict:
+    """Execute the fetch workflow and return the JSON payload."""
 
     uid = args.uniprot_id.upper()
     outdir = Path(args.outdir)
@@ -124,26 +177,22 @@ def main():
         else:
             log("  WARNING: No PAE data available for this entry.", as_json=args.json)
 
-    # JSON output
-    if args.json:
-        output = {
-            "uniprot_id": uid,
-            "model_id": model_id,
-            "gene": gene,
-            "version": version,
-            "global_plddt": plddt,
-            "structure_path": str(struct_path.resolve()),
-            "pae_path": str(pae_path.resolve()) if pae_path else None,
-            "confidence": {
-                "very_high": frac_vh,
-                "confident": frac_c,
-                "low": frac_l,
-                "very_low": frac_vl,
-            },
-        }
-        print(json.dumps(output, indent=2))
-    else:
-        print("Done.")
+    data = {
+        "uniprot_id": uid,
+        "model_id": model_id,
+        "gene": gene,
+        "version": version,
+        "global_plddt": plddt,
+        "structure_path": str(struct_path.resolve()),
+        "pae_path": str(pae_path.resolve()) if pae_path else None,
+        "confidence": {
+            "very_high": frac_vh,
+            "confident": frac_c,
+            "low": frac_l,
+            "very_low": frac_vl,
+        },
+    }
+    return _ok_payload(data)
 
 
 if __name__ == "__main__":

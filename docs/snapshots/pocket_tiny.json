@@ -1,0 +1,30 @@
+{
+  "status": "ok",
+  "data": {
+    "radius_angstrom": 5.0,
+    "protein_atom_count": 3,
+    "ligand_atom_count": 1,
+    "ligand_count": 1,
+    "ligands": [
+      {
+        "ligand": {
+          "chain": "B",
+          "resi": "2",
+          "resname": "LIG",
+          "atom_count": 1
+        },
+        "contact_residue_count": 1,
+        "contact_residues": [
+          {
+            "chain": "A",
+            "resi": "1",
+            "resname": "GLY",
+            "min_distance": 1.4,
+            "ligand_atom": "C1",
+            "protein_atom": "C"
+          }
+        ]
+      }
+    ]
+  }
+}

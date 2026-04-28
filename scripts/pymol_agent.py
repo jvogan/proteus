@@ -15,6 +15,7 @@ import argparse
 import glob
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -82,6 +83,20 @@ def _finalize_process_result(proc: subprocess.CompletedProcess, output_path: str
         result.setdefault("stderr", stderr)
 
     return result
+
+
+def _py_literal(value: str) -> str:
+    return repr(value)
+
+
+def _validate_pymol_color(color: str) -> str:
+    if color in {"spectrum", "bfactor", "chain"}:
+        return color
+    if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*", color):
+        raise ValueError(
+            "Unsafe PyMOL color name. Use spectrum, bfactor, chain, or a simple PyMOL color identifier."
+        )
+    return color
 
 
 def run_pymol_script(script_content: str, timeout: int = 120) -> dict:
@@ -154,7 +169,8 @@ def get_structure_info(pdb_path: str) -> dict:
     """Load a structure and return basic info (chains, atoms, B-factors)."""
     abs_path = os.path.abspath(pdb_path)
     script = f'''
-cmd.load("{abs_path}", "struct")
+structure_path = {_py_literal(abs_path)}
+cmd.load(structure_path, "struct")
 _output["data"]["names"] = cmd.get_names()
 _output["data"]["atom_count"] = cmd.count_atoms("all")
 _output["data"]["chains"] = cmd.get_chains("all")
@@ -185,20 +201,30 @@ def render_structure(pdb_path: str, output_png: str, width: int = 1200, height: 
         style: cartoon, sticks, surface, spheres, lines
         color: spectrum (rainbow), bfactor (blue-white-red), chain, or any PyMOL color name
     """
+    try:
+        color = _validate_pymol_color(color)
+    except ValueError as exc:
+        return {"status": "error", "error": str(exc)}
+
     abs_pdb = os.path.abspath(pdb_path)
     abs_out = os.path.abspath(output_png)
     script = f'''
-cmd.load("{abs_pdb}", "struct")
+structure_path = {_py_literal(abs_pdb)}
+output_png = {_py_literal(abs_out)}
+style = {_py_literal(style)}
+color_mode = {_py_literal(color)}
+
+cmd.load(structure_path, "struct")
 cmd.hide("everything")
-cmd.show("{style}", "all")
-if "{color}" == "spectrum":
+cmd.show(style, "all")
+if color_mode == "spectrum":
     cmd.spectrum("count", "rainbow", "all")
-elif "{color}" == "bfactor":
+elif color_mode == "bfactor":
     cmd.spectrum("b", "blue_white_red", "all")
-elif "{color}" == "chain":
+elif color_mode == "chain":
     util.cbc("all")
 else:
-    cmd.color("{color}", "all")
+    cmd.color(color_mode, "all")
 cmd.bg_color("white")
 cmd.set("ray_opaque_background", 1)
 cmd.set("antialias", 2)
@@ -206,8 +232,8 @@ cmd.set("cartoon_fancy_helices", 1)
 cmd.set("cartoon_smooth_loops", 1)
 cmd.orient()
 cmd.ray({width}, {height})
-cmd.png("{abs_out}")
-_output["data"]["rendered"] = "{abs_out}"
+cmd.png(output_png)
+_output["data"]["rendered"] = output_png
 _output["data"]["size"] = "{width}x{height}"
 '''
     return run_pymol_script(script, timeout=300)  # Rendering can take longer

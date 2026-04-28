@@ -19,9 +19,11 @@ AlphaFold 3 is relevant for proteins, nucleic acids, ligands, ions, and modified
 entities. Its input is JSON-oriented and can specify ligands by CCD code, SMILES,
 or user-provided CCD.
 
-Do not assume AF3 is installed. First check for a local repo, environment, model
-parameters, and databases. If the user only needs an existing single-chain model,
-use AlphaFold DB instead.
+Do not assume AF3 is installed. There is no public hosted API to call from a
+script. First check for a local `google-deepmind/alphafold3` checkout or Docker
+image, model parameters, databases, and GPU support. Local AF3 runs take JSON
+input and write model outputs to an output directory. If the user only needs an
+existing single-chain model, use AlphaFold DB instead.
 
 ## Boltz / Chai
 

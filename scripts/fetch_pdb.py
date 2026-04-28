@@ -26,6 +26,20 @@ RCSB_HEADER = "https://files.rcsb.org/header/{filename}"
 RCSB_BINARY_CIF = "https://models.rcsb.org/{pdb_id}.bcif"
 
 
+class PDBFetchError(RuntimeError):
+    pass
+
+
+def _error_payload(message: str) -> dict:
+    return {"status": "error", "error": message}
+
+
+def _ok_payload(data: dict) -> dict:
+    output = {"status": "ok", "data": data}
+    output.update(data)
+    return output
+
+
 def _pdb_id(value: str) -> str:
     pdb_id = value.strip().upper()
     if not re.fullmatch(r"[A-Z0-9]{4}", pdb_id):
@@ -38,17 +52,25 @@ def _log(message: str, *, as_json: bool = False):
 
 
 def _fetch_json(url: str) -> dict:
-    with urllib.request.urlopen(url, timeout=30) as response:
-        return json.load(response)
+    request = urllib.request.Request(url, headers={"User-Agent": "proteus-skill/1.0"})
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            return json.load(response)
+    except urllib.error.HTTPError as exc:
+        if exc.code == 404:
+            raise PDBFetchError("RCSB entry was not found.") from exc
+        raise PDBFetchError(f"RCSB API returned HTTP {exc.code}: {exc.reason}") from exc
+    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
+        raise PDBFetchError(f"Failed to fetch RCSB metadata: {exc}") from exc
 
 
 def fetch_entry_metadata(pdb_id: str) -> dict:
     """Fetch selected entry metadata from RCSB Data API."""
     try:
         data = _fetch_json(RCSB_DATA_API.format(pdb_id=pdb_id))
-    except urllib.error.HTTPError as exc:
-        if exc.code == 404:
-            raise SystemExit(f"ERROR: PDB ID '{pdb_id}' was not found in RCSB PDB.") from exc
+    except PDBFetchError as exc:
+        if str(exc) == "RCSB entry was not found.":
+            raise PDBFetchError(f"PDB ID '{pdb_id}' was not found in RCSB PDB.") from exc
         raise
 
     info = data.get("rcsb_entry_info", {})
@@ -72,11 +94,11 @@ def fetch_entry_metadata(pdb_id: str) -> dict:
 def build_download_url(pdb_id: str, fmt: str, assembly: int | None, header_only: bool) -> tuple[str, str]:
     """Return (url, filename) for an RCSB downloadable structure artifact."""
     if assembly is not None and fmt != "cif":
-        raise SystemExit("ERROR: --assembly currently supports --format cif only.")
+        raise PDBFetchError("--assembly currently supports --format cif only.")
     if header_only and assembly is not None:
-        raise SystemExit("ERROR: --header-only cannot be combined with --assembly.")
+        raise PDBFetchError("--header-only cannot be combined with --assembly.")
     if header_only and fmt not in {"cif", "xml"}:
-        raise SystemExit("ERROR: --header-only supports --format cif or xml only.")
+        raise PDBFetchError("--header-only supports --format cif or xml only.")
 
     if assembly is not None:
         filename = f"{pdb_id}-assembly{assembly}.cif"
@@ -85,7 +107,7 @@ def build_download_url(pdb_id: str, fmt: str, assembly: int | None, header_only:
     filename = f"{pdb_id}.{fmt}"
     if fmt == "bcif":
         if header_only:
-            raise SystemExit("ERROR: --header-only does not support --format bcif.")
+            raise PDBFetchError("--header-only does not support --format bcif.")
         return RCSB_BINARY_CIF.format(pdb_id=pdb_id.lower()), filename
     if header_only:
         return RCSB_HEADER.format(filename=filename), filename
@@ -94,13 +116,16 @@ def build_download_url(pdb_id: str, fmt: str, assembly: int | None, header_only:
 
 def download(url: str, destination: Path):
     """Download URL to destination, converting HTTP 404s into useful errors."""
+    request = urllib.request.Request(url, headers={"User-Agent": "proteus-skill/1.0"})
     try:
-        with urllib.request.urlopen(url, timeout=60) as response:
+        with urllib.request.urlopen(request, timeout=60) as response:
             destination.write_bytes(response.read())
     except urllib.error.HTTPError as exc:
         if exc.code == 404:
-            raise SystemExit(f"ERROR: RCSB file not found: {url}") from exc
-        raise
+            raise PDBFetchError(f"RCSB file not found: {url}") from exc
+        raise PDBFetchError(f"RCSB download returned HTTP {exc.code}: {exc.reason}") from exc
+    except (urllib.error.URLError, TimeoutError, OSError) as exc:
+        raise PDBFetchError(f"Failed to download RCSB file {url}: {exc}") from exc
 
 
 def main():
@@ -125,29 +150,36 @@ def main():
     parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON to stdout")
     args = parser.parse_args()
 
-    metadata = fetch_entry_metadata(args.pdb_id)
-    output = {
-        "status": "ok",
-        "source": "RCSB PDB",
-        "metadata": metadata,
-        "download": None,
-    }
-
-    if not args.metadata:
-        outdir = Path(args.outdir)
-        outdir.mkdir(parents=True, exist_ok=True)
-        url, filename = build_download_url(args.pdb_id, args.format, args.assembly, args.header_only)
-        path = outdir / filename
-        _log(f"Downloading {args.pdb_id} from RCSB: {url}", as_json=args.json)
-        download(url, path)
-        output["download"] = {
-            "url": url,
-            "path": str(path.resolve()),
-            "bytes": path.stat().st_size,
-            "format": args.format,
-            "assembly": args.assembly,
-            "header_only": args.header_only,
+    try:
+        metadata = fetch_entry_metadata(args.pdb_id)
+        data = {
+            "source": "RCSB PDB",
+            "metadata": metadata,
+            "download": None,
         }
+
+        if not args.metadata:
+            outdir = Path(args.outdir)
+            outdir.mkdir(parents=True, exist_ok=True)
+            url, filename = build_download_url(args.pdb_id, args.format, args.assembly, args.header_only)
+            path = outdir / filename
+            _log(f"Downloading {args.pdb_id} from RCSB: {url}", as_json=args.json)
+            download(url, path)
+            data["download"] = {
+                "url": url,
+                "path": str(path.resolve()),
+                "bytes": path.stat().st_size,
+                "format": args.format,
+                "assembly": args.assembly,
+                "header_only": args.header_only,
+            }
+        output = _ok_payload(data)
+    except (PDBFetchError, OSError) as exc:
+        if args.json:
+            print(json.dumps(_error_payload(str(exc)), indent=2))
+        else:
+            print(f"ERROR: {exc}", file=sys.stderr)
+        sys.exit(1)
 
     if args.json:
         print(json.dumps(output, indent=2))

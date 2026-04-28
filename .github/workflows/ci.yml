@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Compile scripts
+        run: python -m py_compile scripts/*.py tests/test_scripts.py
+
+      - name: Run tests
+        run: python -m unittest -v
+
+      - name: JSON smoke checks
+        run: |
+          python scripts/proteus_doctor.py --json | python -m json.tool >/dev/null
+          python scripts/resolve_structure.py tests/fixtures/tiny.pdb --json | python -m json.tool >/dev/null
+          python scripts/pae_report.py tests/fixtures/tiny_pae.json --json | python -m json.tool >/dev/null
+          python scripts/pocket_report.py tests/fixtures/tiny.pdb --json | python -m json.tool >/dev/null
