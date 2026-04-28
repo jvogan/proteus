@@ -94,6 +94,21 @@ The repository also includes a curated social preview image at
 [`assets/social-preview.jpg`](assets/social-preview.jpg). The larger generated
 banner gallery stays ignored to keep the public repository lean.
 
+## Try It In 60 Seconds
+
+```bash
+git clone https://github.com/jvogan/proteus.git
+cd proteus
+make test
+python3 scripts/proteus_doctor.py --json
+python3 scripts/resolve_structure.py TP53 --no-download --json
+python3 scripts/pocket_report.py tests/fixtures/tiny.pdb --json
+```
+
+These commands require only Python 3.10+. Install PyMOL or ChimeraX later when
+you want rendering, SASA, hydrogen bonds, structure alignment, or live molecular
+visualization.
+
 ## Install
 
 Clone into your agent's skills directory:
