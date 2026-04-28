@@ -1,0 +1,16 @@
+{
+  "status": "ok",
+  "data": {
+    "pdb_id": "1HSG",
+    "title": "CRYSTAL STRUCTURE AT 1.9 ANGSTROMS RESOLUTION OF HUMAN IMMUNODEFICIENCY VIRUS (HIV) II PROTEASE COMPLEXED WITH L-735,524, AN ORALLY BIOAVAILABLE INHIBITOR OF THE HIV PROTEASES",
+    "experimental_methods": ["X-RAY DIFFRACTION"],
+    "resolution": [2.0],
+    "geometry": {
+      "clashscore": 4.97,
+      "bond_rmsz": 0.95,
+      "angle_rmsz": 1.06,
+      "ramachandran_outliers_percent": 0.52,
+      "rotamer_outliers_percent": 7.23
+    }
+  }
+}

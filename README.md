@@ -87,7 +87,7 @@ Small, checked-in snapshots show the JSON shape without requiring downloads:
 
 - [`resolve_structure.py TP53 --no-download --json`](docs/snapshots/resolve_tp53.json)
 - [`pae_report.py tests/fixtures/tiny_pae.json --json`](docs/snapshots/pae_tiny.json)
-- [`validation_report.py 4HHB --json`](docs/snapshots/validation_4hhb.json)
+- [`validation_report.py 1HSG --json`](docs/snapshots/validation_1hsg.json)
 - [`pocket_report.py tests/fixtures/tiny.pdb --json`](docs/snapshots/pocket_tiny.json)
 
 The repository also includes a curated social preview image at

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import ast
 import json
 import subprocess
 import sys
@@ -94,12 +95,17 @@ class ScriptTests(unittest.TestCase):
 
     def test_pymol_literals_and_color_validation(self):
         value = 'path with spaces/"quote";still-path'
-        self.assertEqual(eval(pymol_agent._py_literal(value)), value)
+        self.assertEqual(ast.literal_eval(pymol_agent._py_literal(value)), value)
         self.assertEqual(pymol_agent._validate_pymol_color("carbon"), "carbon")
         with self.assertRaises(ValueError):
             pymol_agent._validate_pymol_color("red; import os")
         result = pymol_agent.render_structure("tests/fixtures/tiny.pdb", "out.png", color="red; import os")
         self.assertEqual(result["status"], "error")
+
+    def test_snapshot_json_files_parse(self):
+        for path in (ROOT / "docs" / "snapshots").glob("*.json"):
+            data = json.loads(path.read_text())
+            self.assertIn(data["status"], {"ok", "error"})
 
     def test_error_payloads_are_json_parseable(self):
         for payload in [
