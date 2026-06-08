@@ -99,6 +99,7 @@ def _script_smoke() -> dict:
         "pocket_report.py",
         "compare_structures.py",
         "add_helix_records.py",
+        "interface_report.py",
         "map_info.py",
     ]
     results = {}

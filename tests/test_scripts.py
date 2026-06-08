@@ -15,6 +15,7 @@ import add_helix_records
 import chimerax_agent
 import fetch_alphafold
 import fetch_pdb
+import interface_report
 import map_info
 import pymol_agent
 import uniprot_lookup
@@ -135,6 +136,41 @@ class ScriptTests(unittest.TestCase):
         self.assertEqual(len(segments), 1)
         self.assertEqual(segments[0], ("A", 1, 14))
 
+    def test_interface_report_pair_detection(self):
+        atoms_a = [{"atom": "CA", "resname": "ALA", "resi": "1", "x": 0, "y": 0, "z": 0},
+                   {"atom": "CA", "resname": "ARG", "resi": "2", "x": 3, "y": 0, "z": 0}]
+        atoms_b = [{"atom": "CA", "resname": "ASP", "resi": "1", "x": 3, "y": 3, "z": 0},
+                   {"atom": "CA", "resname": "GLU", "resi": "2", "x": 10, "y": 10, "z": 0}]
+        res_a, res_b, pair_min = interface_report.analyze_pair(atoms_a, atoms_b, 5.0)
+        self.assertEqual(set(res_a.keys()), {("1", "ALA"), ("2", "ARG")})
+        self.assertEqual(set(res_b.keys()), {("1", "ASP")})
+        self.assertAlmostEqual(min(pair_min.values()), 3.0, places=2)
+
+    def test_interface_report_single_chain_note(self):
+        out = interface_report.analyze_interfaces("tests/fixtures/tiny.pdb")
+        self.assertEqual(out["status"], "ok")
+        self.assertEqual(out["data"]["chains"], ["A"])
+        self.assertEqual(out["data"]["interface_count"], 0)
+        self.assertIn("note", out["data"])
+
+    def test_pymol_verify_png(self):
+        err = {"status": "error", "error": "boom"}
+        self.assertIs(pymol_agent._verify_png(err, "/no/such.png"), err)
+        downgraded = pymol_agent._verify_png({"status": "ok", "data": {}}, "/no/such.png")
+        self.assertEqual(downgraded["status"], "error")
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as fh:
+            fh.write(b"\x89PNG")
+            path = fh.name
+        try:
+            kept = pymol_agent._verify_png({"status": "ok", "data": {}}, path)
+            self.assertEqual(kept["status"], "ok")
+        finally:
+            Path(path).unlink()
+
+    def test_pymol_pocket_missing_file(self):
+        result = pymol_agent.render_pocket("tests/fixtures/does_not_exist.pdb", "out.png")
+        self.assertEqual(result["status"], "error")
+
     def test_map_info_sigma_from_synthetic_mrc(self):
         nx = ny = nz = 4
         vals = [float(i % 7) for i in range(nx * ny * nz)]
@@ -188,6 +224,7 @@ class ScriptTests(unittest.TestCase):
             "scripts/pocket_report.py",
             "scripts/compare_structures.py",
             "scripts/add_helix_records.py",
+            "scripts/interface_report.py",
             "scripts/map_info.py",
         ]:
             proc = run_script(script, "--help")
