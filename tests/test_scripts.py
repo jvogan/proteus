@@ -1,17 +1,21 @@
 #!/usr/bin/env python3
 import ast
 import json
+import struct
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
+import add_helix_records
 import chimerax_agent
 import fetch_alphafold
 import fetch_pdb
+import map_info
 import pymol_agent
 import uniprot_lookup
 
@@ -97,10 +101,59 @@ class ScriptTests(unittest.TestCase):
         value = 'path with spaces/"quote";still-path'
         self.assertEqual(ast.literal_eval(pymol_agent._py_literal(value)), value)
         self.assertEqual(pymol_agent._validate_pymol_color("carbon"), "carbon")
+        self.assertEqual(pymol_agent._validate_pymol_color("plddt"), "plddt")
         with self.assertRaises(ValueError):
             pymol_agent._validate_pymol_color("red; import os")
         result = pymol_agent.render_structure("tests/fixtures/tiny.pdb", "out.png", color="red; import os")
         self.assertEqual(result["status"], "error")
+
+    def test_pymol_plddt_color_script_is_layered(self):
+        script = pymol_agent._color_script("plddt")
+        # Broadest-first layering (no <= in PyMOL selection algebra)
+        self.assertIn('cmd.color("orange"', script)
+        self.assertIn("b > 50", script)
+        self.assertIn("b > 90", script)
+        self.assertLess(script.index("b > 50"), script.index("b > 90"))
+
+    def test_chimerax_rest_color_validation(self):
+        import chimerax_rest
+        self.assertEqual(chimerax_rest._validate_color("plddt"), "plddt")
+        with self.assertRaises(ValueError):
+            chimerax_rest._validate_color("red; close session")
+        result = chimerax_rest.rest_render("tests/fixtures/tiny.pdb", "out.png", color="red; close")
+        self.assertEqual(result["status"], "error")
+
+    def test_add_helix_detects_ideal_helix(self):
+        import math
+        coords = []
+        for i in range(1, 15):
+            ang = math.radians(100 * i)
+            coords.append((i, "A", 2.3 * math.cos(ang), 2.3 * math.sin(ang), 1.5 * i))
+        is_helix = add_helix_records.detect_helix_residues(coords)
+        self.assertTrue(all(is_helix))
+        segments = add_helix_records.helix_segments(coords, is_helix, min_len=6)
+        self.assertEqual(len(segments), 1)
+        self.assertEqual(segments[0], ("A", 1, 14))
+
+    def test_map_info_sigma_from_synthetic_mrc(self):
+        nx = ny = nz = 4
+        vals = [float(i % 7) for i in range(nx * ny * nz)]
+        header = bytearray(1024)
+        struct.pack_into("<4i", header, 0, nx, ny, nz, 2)  # dims + float32 mode
+        struct.pack_into("<i", header, 92, 0)              # nsymbt = 0
+        body = b"".join(struct.pack("<f", v) for v in vals)
+        with tempfile.NamedTemporaryFile(suffix=".mrc", delete=False) as fh:
+            fh.write(bytes(header) + body)
+            path = fh.name
+        try:
+            dims, mode, mean, sigma = map_info.read_map_stats(path)
+        finally:
+            Path(path).unlink()
+        expected_mean = sum(vals) / len(vals)
+        self.assertEqual(dims, (4, 4, 4))
+        self.assertEqual(mode, 2)
+        self.assertAlmostEqual(mean, expected_mean, places=4)
+        self.assertGreater(sigma, 0)
 
     def test_snapshot_json_files_parse(self):
         for path in (ROOT / "docs" / "snapshots").glob("*.json"):
@@ -127,12 +180,15 @@ class ScriptTests(unittest.TestCase):
             "scripts/pdb_info.py",
             "scripts/pymol_agent.py",
             "scripts/chimerax_agent.py",
+            "scripts/chimerax_rest.py",
             "scripts/proteus_doctor.py",
             "scripts/pae_report.py",
             "scripts/resolve_structure.py",
             "scripts/validation_report.py",
             "scripts/pocket_report.py",
             "scripts/compare_structures.py",
+            "scripts/add_helix_records.py",
+            "scripts/map_info.py",
         ]:
             proc = run_script(script, "--help")
             self.assertIn("usage:", proc.stdout)

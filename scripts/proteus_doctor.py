@@ -92,11 +92,14 @@ def _script_smoke() -> dict:
         "pdb_info.py",
         "pymol_agent.py",
         "chimerax_agent.py",
+        "chimerax_rest.py",
         "pae_report.py",
         "resolve_structure.py",
         "validation_report.py",
         "pocket_report.py",
         "compare_structures.py",
+        "add_helix_records.py",
+        "map_info.py",
     ]
     results = {}
     for script in scripts:
@@ -121,6 +124,7 @@ def _network_check(url: str) -> dict:
 def build_report(include_network: bool) -> dict:
     pymol = _find_pymol()
     chimerax = _find_chimerax()
+    ffmpeg = shutil.which("ffmpeg")
     data = {
         "root": str(ROOT),
         "platform": {
@@ -131,6 +135,7 @@ def build_report(include_network: bool) -> dict:
         "tools": {
             "pymol": {"ok": bool(pymol), "path": pymol},
             "chimerax": {"ok": bool(chimerax), "path": chimerax},
+            "ffmpeg": {"ok": bool(ffmpeg), "path": ffmpeg},
         },
         "scripts": _script_smoke(),
         "network": None,
@@ -141,6 +146,7 @@ def build_report(include_network: bool) -> dict:
             "alphafold_fetch": include_network,
             "pymol_rendering": bool(pymol),
             "chimerax_analysis": bool(chimerax),
+            "turntable_movies": bool((pymol or chimerax) and ffmpeg),
         },
     }
     if include_network:
@@ -169,6 +175,7 @@ def main():
         print(f"Python: {data['python']['version']} ({'ok' if data['python']['ok'] else 'too old'})")
         print(f"PyMOL: {data['tools']['pymol']['path'] or 'not found'}")
         print(f"ChimeraX: {data['tools']['chimerax']['path'] or 'not found'}")
+        print(f"ffmpeg: {data['tools']['ffmpeg']['path'] or 'not found'} (turntable movies)")
         failed = [name for name, result in data["scripts"].items() if not result["ok"]]
         print(f"Script help checks: {'ok' if not failed else 'failed: ' + ', '.join(failed)}")
         if data["network"]:

@@ -201,6 +201,20 @@ result = cmd.cealign("target", "mobile")  # NOTE: target FIRST, mobile SECOND
 **Critical:** `cealign` argument order is **(target, mobile)** — the first argument
 stays fixed, the second gets moved. This is opposite to `align` and `super`.
 
+### Exploded side-by-side comparison
+
+To show two structures as an unambiguous before/after panel, superpose them, then
+move *only one object* aside with `camera=1` (so the shift is in screen space):
+
+```python
+cmd.super("design and name CA", "reference and name CA")   # CA-only overlay
+cmd.translate([22, 0, 0], object="design", camera=1)        # pull one copy aside
+cmd.rotate("y", 22, object="design", camera=1)              # tilt it for depth
+```
+
+`camera=1` moves the object relative to the camera, not its own frame, so the
+anchored structure stays put while the moved one reads as a separate panel.
+
 ## Measurement & Analysis
 
 ```
@@ -255,6 +269,52 @@ zoom selection                # Zoom to selection
 center selection              # Center on selection
 turn y, 45                    # Rotate 45 degrees around Y
 ```
+
+**`set auto_zoom, 0` first when you compose a manual view.** Otherwise each
+`load`/`show` re-zooms and fights your `orient`/`zoom`/`turn` framing. Set it
+before loading, frame last.
+
+## Turntable Movies & Animation
+
+PyMOL ray-traces each frame headlessly; ffmpeg encodes them. `pymol_agent.py spin`
+packages this, but the core loop is:
+
+```python
+cmd.set("cache_frames", 0)        # CRITICAL: else every frame is cached in RAM -> OOM
+cmd.orient()
+n = 60
+for i in range(n):
+    cmd.ray(800, 600)
+    cmd.png(f"/tmp/frames/frame_{i:04d}.png")
+    cmd.turn("y", 360.0 / n)
+```
+
+Then encode (web-playable MP4, even dimensions, faststart):
+
+```bash
+ffmpeg -y -framerate 30 -i /tmp/frames/frame_%04d.png \
+  -c:v libx264 -crf 18 -pix_fmt yuv420p -movflags +faststart \
+  -vf "scale=trunc(iw/2)*2:trunc(ih/2)*2" spin.mp4
+```
+
+`cmd.turn` after `cmd.orient()` rotates about the scene center, so the molecule
+spins in place instead of drifting across the frame.
+
+## Density Maps (PyMOL)
+
+```python
+# Simulate density from a model when you have no experimental map
+cmd.map_new("sim_map", "gaussian", 1.0, "struct", 5)
+cmd.isomesh("dens", "sim_map", 1.0, "struct", carve=2.5)
+
+# Show an experimental map carved around the model (fast + local)
+cmd.isomesh("dens", "emd_map", level, "struct", carve=2.5)
+```
+
+**Carve density around the model** (`carve=2.5`). Contouring a *whole* map is slow
+and can hang in headless PyMOL (the headless build lacks the VTKm accelerator) —
+do whole-map surfaces in ChimeraX instead. Use `scripts/map_info.py` to choose a
+sigma-based contour level (absolute levels differ per map).
 
 ## Publication Settings
 

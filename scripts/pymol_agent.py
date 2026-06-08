@@ -90,13 +90,99 @@ def _py_literal(value: str) -> str:
 
 
 def _validate_pymol_color(color: str) -> str:
-    if color in {"spectrum", "bfactor", "chain"}:
+    if color in {"spectrum", "bfactor", "chain", "plddt"}:
         return color
     if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*", color):
         raise ValueError(
-            "Unsafe PyMOL color name. Use spectrum, bfactor, chain, or a simple PyMOL color identifier."
+            "Unsafe PyMOL color name. Use spectrum, bfactor, chain, plddt, or a simple PyMOL color identifier."
         )
     return color
+
+
+def _color_script(color_mode: str, selection: str = "all") -> str:
+    """PyMOL command lines that apply a color mode to a selection."""
+    sel = _py_literal(selection)
+    if color_mode == "spectrum":
+        return f'cmd.spectrum("count", "rainbow", {sel})'
+    if color_mode == "bfactor":
+        return f'cmd.spectrum("b", "blue_white_red", {sel})'
+    if color_mode == "chain":
+        return f'util.cbc({sel})'
+    if color_mode == "plddt":
+        # Official AlphaFold bins. Layered broadest-first because PyMOL selection
+        # algebra has no `<=`: paint everything low, then override upward.
+        return "\n".join([
+            f'cmd.color("orange", {sel})',
+            f'cmd.color("yellow", {_py_literal(f"({selection}) and b > 50")})',
+            f'cmd.color("cyan", {_py_literal(f"({selection}) and b > 70")})',
+            f'cmd.color("blue", {_py_literal(f"({selection}) and b > 90")})',
+        ])
+    return f'cmd.color({_py_literal(color_mode)}, {sel})'
+
+
+def _preset_script(preset: str) -> str:
+    """PyMOL command lines for a render look. Default: publication."""
+    if preset == "illustration":
+        return "\n".join([
+            'cmd.bg_color("white")',
+            'cmd.set("ray_opaque_background", 1)',
+            'cmd.set("antialias", 2)',
+            'cmd.set("cartoon_fancy_helices", 1)',
+            'cmd.set("cartoon_smooth_loops", 1)',
+            'cmd.set("cartoon_flat_sheets", 1)',
+            'cmd.set("ray_trace_mode", 3)',     # quantized colors + black outlines
+            'cmd.set("ray_trace_color", "black")',
+        ])
+    if preset == "soft":
+        return "\n".join([
+            'cmd.bg_color("gray90")',
+            'cmd.set("ray_opaque_background", 1)',
+            'cmd.set("orthoscopic", 1)',
+            'cmd.set("ray_shadows", 0)',
+            'cmd.set("antialias", 2)',
+            'cmd.set("ambient", 0.4)',
+            'cmd.set("specular", 0.15)',
+            'cmd.set("cartoon_fancy_helices", 1)',
+            'cmd.set("cartoon_smooth_loops", 1)',
+            'cmd.set("cartoon_flat_sheets", 1)',
+        ])
+    return "\n".join([
+        'cmd.bg_color("white")',
+        'cmd.set("ray_opaque_background", 1)',
+        'cmd.set("antialias", 2)',
+        'cmd.set("ray_shadows", 1)',
+        'cmd.set("specular", 0.25)',
+        'cmd.set("ambient", 0.35)',
+        'cmd.set("cartoon_fancy_helices", 1)',
+        'cmd.set("cartoon_smooth_loops", 1)',
+        'cmd.set("cartoon_flat_sheets", 1)',
+    ])
+
+
+def _encode_movie(frame_dir: str, output: str, fps: int = 30) -> str:
+    """Encode frame_%04d.png frames to MP4 (or GIF if output ends .gif).
+
+    yuv420p + even-dimension scaling keeps the MP4 web-playable; GIF uses a
+    two-pass palette for clean colors. Raises CalledProcessError on failure.
+    """
+    out = os.path.abspath(output)
+    pattern = os.path.join(frame_dir, "frame_%04d.png")
+    even = "scale=trunc(iw/2)*2:trunc(ih/2)*2"
+    if out.lower().endswith(".gif"):
+        palette = os.path.join(frame_dir, "palette.png")
+        subprocess.run(["ffmpeg", "-y", "-framerate", str(fps), "-i", pattern,
+                        "-vf", f"{even},palettegen", palette],
+                       check=True, capture_output=True, text=True)
+        subprocess.run(["ffmpeg", "-y", "-framerate", str(fps), "-i", pattern,
+                        "-i", palette, "-lavfi", f"{even} [x]; [x][1:v] paletteuse", out],
+                       check=True, capture_output=True, text=True)
+    else:
+        subprocess.run(["ffmpeg", "-y", "-framerate", str(fps), "-i", pattern,
+                        "-c:v", "libx264", "-preset", "slow", "-crf", "18",
+                        "-pix_fmt", "yuv420p", "-movflags", "+faststart",
+                        "-vf", even, out],
+                       check=True, capture_output=True, text=True)
+    return out
 
 
 def run_pymol_script(script_content: str, timeout: int = 120) -> dict:
@@ -192,14 +278,17 @@ if stored_b:
 
 
 def render_structure(pdb_path: str, output_png: str, width: int = 1200, height: int = 900,
-                     style: str = "cartoon", color: str = "spectrum") -> dict:
+                     style: str = "cartoon", color: str = "spectrum",
+                     preset: str = "publication") -> dict:
     """Load and render a structure to PNG using PyMOL's software ray tracer.
 
     Works fully headless — no display required.
 
     Args:
         style: cartoon, sticks, surface, spheres, lines
-        color: spectrum (rainbow), bfactor (blue-white-red), chain, or any PyMOL color name
+        color: spectrum (rainbow), bfactor (blue-white-red), chain, plddt
+               (AlphaFold confidence bins), or any PyMOL color name
+        preset: publication, illustration (outlined), or soft (neutral background)
     """
     try:
         color = _validate_pymol_color(color)
@@ -209,34 +298,74 @@ def render_structure(pdb_path: str, output_png: str, width: int = 1200, height: 
     abs_pdb = os.path.abspath(pdb_path)
     abs_out = os.path.abspath(output_png)
     script = f'''
-structure_path = {_py_literal(abs_pdb)}
-output_png = {_py_literal(abs_out)}
-style = {_py_literal(style)}
-color_mode = {_py_literal(color)}
-
-cmd.load(structure_path, "struct")
+cmd.load({_py_literal(abs_pdb)}, "struct")
 cmd.hide("everything")
-cmd.show(style, "all")
-if color_mode == "spectrum":
-    cmd.spectrum("count", "rainbow", "all")
-elif color_mode == "bfactor":
-    cmd.spectrum("b", "blue_white_red", "all")
-elif color_mode == "chain":
-    util.cbc("all")
-else:
-    cmd.color(color_mode, "all")
-cmd.bg_color("white")
-cmd.set("ray_opaque_background", 1)
-cmd.set("antialias", 2)
-cmd.set("cartoon_fancy_helices", 1)
-cmd.set("cartoon_smooth_loops", 1)
+cmd.show({_py_literal(style)}, "all")
+{_color_script(color)}
+{_preset_script(preset)}
 cmd.orient()
 cmd.ray({width}, {height})
-cmd.png(output_png)
-_output["data"]["rendered"] = output_png
+cmd.png({_py_literal(abs_out)})
+_output["data"]["rendered"] = {_py_literal(abs_out)}
 _output["data"]["size"] = "{width}x{height}"
 '''
     return run_pymol_script(script, timeout=300)  # Rendering can take longer
+
+
+def render_spin(pdb_path: str, output: str, frames: int = 60, width: int = 800,
+                height: int = 600, style: str = "cartoon", color: str = "spectrum",
+                preset: str = "publication", fps: int = 30) -> dict:
+    """Render a 360-degree y-spin as ray-traced frames, then encode to a movie.
+
+    This is the headless-correct turntable path: PyMOL ray-traces each frame
+    (works without a display) and ffmpeg encodes them. Degrades gracefully —
+    if ffmpeg is missing, the frames are written and their directory returned.
+    """
+    if not PYMOL:
+        return {"status": "error", "error": "PyMOL not found. Install it or set PYMOL_BIN."}
+    if not os.path.isfile(pdb_path):
+        return {"status": "error", "error": f"Structure file not found: {pdb_path}"}
+    try:
+        color = _validate_pymol_color(color)
+    except ValueError as exc:
+        return {"status": "error", "error": str(exc)}
+
+    ffmpeg = shutil.which("ffmpeg")
+    frame_dir = tempfile.mkdtemp(prefix="proteus_spin_")
+    abs_pdb = os.path.abspath(pdb_path)
+    script = f'''
+cmd.load({_py_literal(abs_pdb)}, "struct")
+cmd.hide("everything")
+cmd.show({_py_literal(style)}, "all")
+{_color_script(color)}
+{_preset_script(preset)}
+cmd.set("cache_frames", 0)   # else PyMOL caches every frame in RAM -> OOM on long spins
+cmd.orient()
+_n = {frames}
+for _i in range(_n):
+    cmd.ray({width}, {height})
+    cmd.png(os.path.join({_py_literal(frame_dir)}, "frame_%04d.png" % _i))
+    cmd.turn("y", 360.0 / _n)
+_output["data"]["frames"] = _n
+'''
+    result = run_pymol_script(script, timeout=max(600, frames * 20))
+    if result.get("status") != "ok":
+        shutil.rmtree(frame_dir, ignore_errors=True)
+        return result
+    if not ffmpeg:
+        return {"status": "ok", "data": {
+            "movie": None, "frames_dir": frame_dir, "frame_count": frames,
+            "note": "ffmpeg not found; wrote frames but did not encode a movie.",
+        }}
+    try:
+        _encode_movie(frame_dir, output, fps)
+    except subprocess.CalledProcessError as exc:
+        return {"status": "error", "error": f"ffmpeg failed: {(exc.stderr or '')[:300]}",
+                "data": {"frames_dir": frame_dir}}
+    shutil.rmtree(frame_dir, ignore_errors=True)
+    return {"status": "ok", "data": {
+        "movie": os.path.abspath(output), "frame_count": frames, "fps": fps,
+    }}
 
 
 def main():
@@ -266,7 +395,20 @@ def main():
     p_render.add_argument("--width", type=int, default=1200)
     p_render.add_argument("--height", type=int, default=900)
     p_render.add_argument("--style", default="cartoon", choices=["cartoon", "sticks", "surface", "spheres", "lines"])
-    p_render.add_argument("--color", default="spectrum", help="spectrum, bfactor, chain, or PyMOL color name")
+    p_render.add_argument("--color", default="spectrum", help="spectrum, bfactor, chain, plddt, or PyMOL color name")
+    p_render.add_argument("--preset", default="publication", choices=["publication", "illustration", "soft"])
+
+    # spin
+    p_spin = sub.add_parser("spin", help="Render a 360-degree turntable movie (frames -> ffmpeg)")
+    p_spin.add_argument("pdb", help="Path to structure file")
+    p_spin.add_argument("output", nargs="?", default="/tmp/pymol_spin.mp4", help="Output movie path (.mp4 or .gif)")
+    p_spin.add_argument("--frames", type=int, default=60)
+    p_spin.add_argument("--width", type=int, default=800)
+    p_spin.add_argument("--height", type=int, default=600)
+    p_spin.add_argument("--style", default="cartoon", choices=["cartoon", "sticks", "surface", "spheres", "lines"])
+    p_spin.add_argument("--color", default="spectrum", help="spectrum, bfactor, chain, plddt, or PyMOL color name")
+    p_spin.add_argument("--preset", default="publication", choices=["publication", "illustration", "soft"])
+    p_spin.add_argument("--fps", type=int, default=30)
 
     args = parser.parse_args()
 
@@ -275,7 +417,11 @@ def main():
     elif args.command == "info":
         result = get_structure_info(args.pdb)
     elif args.command == "render":
-        result = render_structure(args.pdb, args.output, args.width, args.height, args.style, args.color)
+        result = render_structure(args.pdb, args.output, args.width, args.height,
+                                  args.style, args.color, args.preset)
+    elif args.command == "spin":
+        result = render_spin(args.pdb, args.output, args.frames, args.width, args.height,
+                             args.style, args.color, args.preset, args.fps)
     else:
         parser.print_help()
         sys.exit(1)

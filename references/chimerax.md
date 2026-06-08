@@ -128,6 +128,34 @@ except Exception:
 curl "http://127.0.0.1:50888/run?command=remotecontrol+rest+stop"
 ```
 
+### Managed rendering with `chimerax_rest.py`
+
+`scripts/chimerax_rest.py` packages the full lifecycle so you don't manage the
+process by hand: it launches a GUI ChimeraX on an ephemeral port (parallel-safe),
+polls `version` until ready, drives commands over HTTP with JSON-envelope error
+detection (`json true` surfaces command-level failures even on HTTP 200), and
+guarantees teardown.
+
+```bash
+python3 scripts/chimerax_rest.py render structure.pdb out.png --color plddt
+python3 scripts/chimerax_rest.py spin structure.pdb out.mp4 --frames 72
+python3 scripts/chimerax_rest.py run "open 1ubq from pdb; cartoon; color bychain"
+```
+
+**The 0-byte-PNG save race.** REST `save` can return HTTP 200 before the GL
+framebuffer is flushed, leaving a 0-byte file (worse under heavy cartoon
+recompute). After `save`, issue `wait 1` and poll the output file for non-zero
+size, retrying the save a few times:
+
+```python
+cx_run("wait 1")
+cx_run(f"save {png} width 1200 height 900 supersample 3")
+for _ in range(16):
+    if os.path.exists(png) and os.path.getsize(png) > 0:
+        break
+    time.sleep(0.5)
+```
+
 **CRITICAL: ChimeraX is NOT thread-safe.** Sending REST calls from Python
 background threads causes `EXC_BAD_ACCESS` crashes on macOS. All REST calls
 must happen from the main thread. If you need concurrency, use `asyncio`
@@ -215,6 +243,14 @@ open 21924 from emdb             # Cryo-EM density map
 directory when launched via subprocess may differ from yours, and unquoted paths
 with spaces or semicolons can break command parsing.
 
+**Asymmetric unit vs biological assembly.** Deposited coordinates are the
+asymmetric unit, which is not always the functional oligomer (a "dimer" entry may
+deposit one chain). Build the biological assembly explicitly:
+
+```
+sym #1 assembly 1 copies true     # generate biological assembly 1
+```
+
 ### Visualization
 ```
 cartoon                           # Show cartoon ribbon
@@ -229,6 +265,11 @@ color bfactor #1 palette alphafold  # AlphaFold confidence colors
 transparency #1 50                # 50% transparent
 transparency #1 50 target c       # Cartoon only (target: c=cartoon, s=surface, a=atoms)
 ```
+
+**Color-name traps.** `gold`/`yellow` atom spheres often render visibly green —
+use `orange` for a true gold read. And `color #1 cartoons #...` silently
+mis-parses `cartoons` as a (missing) color name: the command is `cartoon`, then
+`color #1 <color>` as separate steps.
 
 ### Presets
 ```
