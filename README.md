@@ -41,10 +41,14 @@ Rosetta-oriented protein design guidance without building a custom plugin.
 
 ## What It Provides
 
-- **17 documented gotchas** for PyMOL, ChimeraX, and AlphaFold DB — hard-won from real debugging
-- Tool detection for PyMOL and ChimeraX across macOS and Linux installs
-- Headless PyMOL rendering for publication-quality structure figures
+- **23 documented gotchas** for PyMOL, ChimeraX, AlphaFold DB, rendering, and cryo-EM maps — hard-won from real debugging
+- Tool detection for PyMOL, ChimeraX, and ffmpeg across macOS and Linux installs
+- Headless PyMOL rendering for publication-quality structure figures, with publication/illustration/soft presets and pLDDT coloring
+- Headless turntable movies (PyMOL ray-traced frames + ffmpeg), degrading gracefully when ffmpeg is absent
+- Managed ChimeraX REST rendering — launches a GUI session, renders via GPU, defeats the 0-byte-PNG save race, and tears down cleanly
 - ChimeraX analysis helpers for alignment, SASA, and hydrogen-bond workflows
+- HELIX-record injection for CA-only backbones (RFdiffusion / Genie designs) so cartoons render correctly
+- MRC/CCP4 map inspection with sigma-based contour-level suggestions
 - AlphaFold DB fetch with confidence interpretation and pLDDT coloring
 - RCSB PDB fetch for experimental coordinates, metadata, and biological assembly mmCIF
 - UniProt lookup for resolving gene/protein names before AlphaFold fetches
@@ -160,7 +164,11 @@ python3 scripts/validation_report.py 4HHB --json                   # wwPDB valid
 python3 scripts/pocket_report.py 1HSG --json                       # ligand-pocket contacts
 python3 scripts/resolve_structure.py TP53 --json                   # one-command resolver
 python3 scripts/pymol_agent.py render structure.pdb output.png     # headless render
+python3 scripts/pymol_agent.py spin structure.pdb spin.mp4         # turntable movie (needs ffmpeg)
 python3 scripts/chimerax_agent.py align reference.pdb mobile.pdb   # structure alignment
+python3 scripts/chimerax_rest.py render structure.pdb out.png      # GPU render via managed REST
+python3 scripts/add_helix_records.py model.pdb --json              # fix CA-only backbone cartoons
+python3 scripts/map_info.py map.mrc --json                         # cryo-EM contour levels
 ```
 
 ## Layout
@@ -178,10 +186,13 @@ proteus/
 │   ├── pymol.md
 │   └── rosetta.md
 └── scripts/              # Agent helper scripts (all stdlib-only)
+    ├── add_helix_records.py
     ├── chimerax_agent.py
+    ├── chimerax_rest.py
     ├── compare_structures.py
     ├── fetch_pdb.py
     ├── fetch_alphafold.py
+    ├── map_info.py
     ├── pae_report.py
     ├── pdb_info.py
     ├── pocket_report.py

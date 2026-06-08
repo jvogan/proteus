@@ -105,8 +105,11 @@ debugging, patching, or the help text is insufficient for the task.
 | `scripts/validation_report.py` | Fetch wwPDB/RCSB validation quality metrics | `python3 scripts/validation_report.py 4HHB --json` |
 | `scripts/pocket_report.py` | Zero-dep ligand pocket contacts from PDB/PDB ID | `python3 scripts/pocket_report.py 1HSG --json` |
 | `scripts/compare_structures.py` | PyMOL CE alignment + optional per-residue deviations | `python3 scripts/compare_structures.py ref.pdb mobile.pdb --json` |
-| `scripts/pymol_agent.py` | Headless PyMOL driver | `python3 scripts/pymol_agent.py info structure.pdb` |
-| `scripts/chimerax_agent.py` | Headless ChimeraX driver | `python3 scripts/chimerax_agent.py run "open 1ubq; info chains #1"` |
+| `scripts/pymol_agent.py` | Headless PyMOL driver (info, render, **spin movie**) | `python3 scripts/pymol_agent.py render structure.pdb out.png --color plddt` |
+| `scripts/chimerax_agent.py` | Headless ChimeraX driver (analysis, `--nogui`) | `python3 scripts/chimerax_agent.py run "open 1ubq; info chains #1"` |
+| `scripts/chimerax_rest.py` | Managed ChimeraX REST GUI render (GPU) + turntable | `python3 scripts/chimerax_rest.py render structure.pdb out.png --color plddt` |
+| `scripts/add_helix_records.py` | Add HELIX records to CA-only backbones so cartoons render | `python3 scripts/add_helix_records.py model.pdb --json` |
+| `scripts/map_info.py` | MRC/CCP4 map stats + sigma-based contour levels | `python3 scripts/map_info.py map.mrc --json` |
 | `scripts/pdb_info.py` | Legacy zero-dep PDB inspector (PDB only) | `python3 scripts/pdb_info.py structure.pdb` |
 
 ## Critical Gotchas (Read This First)
@@ -204,6 +207,38 @@ can skip by knowing them upfront.
     (polyubiquitin-C, 685 residues) instead. Note: this is the full
     polyubiquitin chain, not the 76-residue monomer.
 
+### Rendering, Animation & Maps
+
+18. **PyMOL spin loops need `set cache_frames, 0`.** Otherwise PyMOL caches
+    every ray-traced frame in RAM and the process is OOM-killed partway through
+    a turntable. Set it before the render loop. (`pymol_agent.py spin` does this
+    for you.)
+
+19. **`set auto_zoom, 0` before loading when composing a manual view.** Each
+    `load`/`show` otherwise re-zooms and fights your `orient`/`zoom`/`turn`
+    framing. Set it first, frame last.
+
+20. **Whole-map isosurfaces stall in headless PyMOL.** The headless build lacks
+    the VTKm accelerator, so contouring a full density map can hang for minutes
+    even on a small map. Carve the mesh around the model
+    (`isomesh m, map, level, sele, carve=2.5`) or do the whole-map surface in
+    ChimeraX. Use `scripts/map_info.py` to pick a sigma-based contour level.
+
+21. **ChimeraX REST `save` can return before the PNG is flushed** — a 0-byte
+    file, worse under heavy cartoon recompute. After `save`, issue `wait 1` and
+    poll the file for non-zero size, retrying a few times.
+    (`scripts/chimerax_rest.py` handles this.)
+
+22. **ChimeraX color-name traps.** `gold`/`yellow` atom spheres often render
+    visibly green — use `orange` for a true gold read. And `color #1 cartoons #...`
+    silently mis-parses `cartoons` as a color: the command is `cartoon`, then
+    `color #1 <color>`.
+
+23. **Deposited coordinates are the asymmetric unit, not necessarily the
+    biological assembly.** A "dimer" entry may deposit a single chain. Build the
+    functional oligomer with ChimeraX `sym #1 assembly 1 copies true`, or expand
+    crystal neighbors in PyMOL with `symexp mate_, obj, sele, 5`.
+
 ## Common Workflows
 
 ### Quick Structure Inspection
@@ -273,6 +308,39 @@ ray 1200, 900
 png output.png
 ```
 
+Render presets are also available on the helper: `pymol_agent.py render file.pdb
+out.png --preset publication|illustration|soft --color spectrum|chain|bfactor|plddt`.
+
+### Turntable Movie (Headless)
+```bash
+# PyMOL ray-traces each frame (works with no display); ffmpeg encodes them.
+python3 scripts/pymol_agent.py spin structure.pdb spin.mp4 --frames 60 --color plddt
+# Degrades gracefully: with no ffmpeg, the frames are written and returned.
+```
+This is the macOS-correct path — ChimeraX needs a GPU/GUI context to render.
+
+### ChimeraX GPU Rendering (Managed REST)
+```bash
+# Launches a GUI ChimeraX on an ephemeral port, renders via GPU, tears down.
+python3 scripts/chimerax_rest.py render structure.pdb out.png --style surface --color bychain
+python3 scripts/chimerax_rest.py spin structure.pdb out.mp4 --frames 72
+```
+Unlike `chimerax_agent.py` (analysis only, `--nogui`), this renders images and
+defeats the 0-byte-PNG save race (gotcha 21).
+
+### CA-only Backbone (de-novo designs)
+```bash
+# RFdiffusion / Genie backbones render as spaghetti without HELIX records.
+python3 scripts/add_helix_records.py model.pdb -o model_ss.pdb --json
+# Then render model_ss.pdb; in PyMOL also: set cartoon_trace_atoms, 1
+```
+
+### Cryo-EM Contour Level
+```bash
+# Sigma-based level for `volume`/`isomesh` (absolute level differs per map).
+python3 scripts/map_info.py map.mrc --json   # -> suggested_level at 1/1.5/2/3 sigma
+```
+
 ## Good Demo Proteins
 
 | UniProt / PDB | Protein | Good for |
@@ -326,6 +394,10 @@ For multi-step workflows, write a summary JSON report at the end with:
 | Compare two structures | `python3 scripts/compare_structures.py ref.pdb mobile.pdb --per-residue --json` |
 | Get structure info via PyMOL | `python3 scripts/pymol_agent.py info file.pdb` |
 | Render a structure headless | `python3 scripts/pymol_agent.py render file.pdb out.png` |
+| Render a turntable movie | `python3 scripts/pymol_agent.py spin file.pdb out.mp4` |
+| Render via ChimeraX GPU (REST) | `python3 scripts/chimerax_rest.py render file.pdb out.png` |
+| Fix a CA-only backbone for cartoons | `python3 scripts/add_helix_records.py model.pdb` |
+| Pick a cryo-EM contour level | `python3 scripts/map_info.py map.mrc --json` |
 | Fetch an AlphaFold prediction | `python3 scripts/fetch_alphafold.py UNIPROT_ID --pae --json` |
 | Align two structures (ChimeraX) | `python3 scripts/chimerax_agent.py align ref.pdb mobile.pdb` |
 | Measure SASA | `python3 scripts/chimerax_agent.py sasa file.pdb` |

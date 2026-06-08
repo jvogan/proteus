@@ -1,7 +1,43 @@
 __pycache__/
 *.py[cod]
 .DS_Store
+
+# Fetched structures and maps (keep the repo free of downloaded data)
 AF-*.pdb
 AF-*.cif
 AF-*_pae.json
+*.pdb
+*.cif
+*.mmcif
+*.bcif
+*.ent
+*.map
+*.mrc
+*.mrcs
+*.ccp4
+!tests/fixtures/*.pdb
+!tests/fixtures/*.cif
+
+# Rendered output and movies (host large media externally, not in-repo)
+*.mp4
+*.mov
+*.gif
+*.webm
+/*.png
+/scripts/*.png
 banners/
+
+# Sequences and model weights
+*.fasta
+*.fa
+*.fastq
+*.pt
+*.pth
+*.npy
+*.npz
+
+# Secrets
+*.pem
+*.key
+.env
+.env.*
