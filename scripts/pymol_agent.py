@@ -446,6 +446,94 @@ _output["data"]["pocket_residues"] = cmd.count_atoms("pocket and name CA")
     return _verify_png(result, abs_out)
 
 
+def render_density(pdb_path: str, output: str, map_path: str = None, simulate: bool = False,
+                   level: float = None, n_sigma: float = 2.0, carve: float = 2.5,
+                   residue: str = None, color: str = "chain", width: int = 1200,
+                   height: int = 900, preset: str = "publication") -> dict:
+    """Render a model fitted in cryo-EM density (real map or simulated).
+
+    The density mesh is carved around the model (or around `residue`), which
+    avoids the whole-map contour stall in headless PyMOL. With `residue`, shows
+    that selection as sticks and zooms on it — the "is this sidechain supported
+    by density?" figure. Without a map, `simulate` generates a gaussian density
+    from the model so the same path works for predicted/designed structures.
+
+    The contour level defaults to mean + n_sigma * sigma from the map (via
+    map_info), or 1.0 for simulated density.
+    """
+    # Validate inputs before checking for the tool, so argument errors are
+    # deterministic whether or not PyMOL is installed.
+    if not os.path.isfile(pdb_path):
+        return {"status": "error", "error": f"Structure file not found: {pdb_path}"}
+    if not simulate and not map_path:
+        return {"status": "error", "error": "Provide --map, or use --simulate to generate density from the model."}
+    if map_path and not os.path.isfile(map_path):
+        return {"status": "error", "error": f"Map file not found: {map_path}"}
+    if not PYMOL:
+        return {"status": "error", "error": "PyMOL not found. Install it or set PYMOL_BIN."}
+    try:
+        color = _validate_pymol_color(color)
+    except ValueError as exc:
+        return {"status": "error", "error": str(exc)}
+
+    # Contour level: explicit > sigma-from-map > simulated default.
+    auto_level = None
+    if level is None:
+        if simulate:
+            level = 1.0
+        else:
+            try:
+                import map_info
+                _, _, mean, sigma = map_info.read_map_stats(map_path)
+                level = round(mean + n_sigma * sigma, 4)
+                auto_level = {"mean": round(mean, 4), "sigma": round(sigma, 4), "n_sigma": n_sigma}
+            except Exception:
+                level = 1.0
+
+    abs_pdb = os.path.abspath(pdb_path)
+    abs_out = os.path.abspath(output)
+    sel = "(%s)" % residue if residue else None
+    carve_target = sel if sel else "struct"
+
+    lines = [f'cmd.load({_py_literal(abs_pdb)}, "struct")']
+    if simulate:
+        lines.append('cmd.map_new("emap", "gaussian", 1.0, "struct", 5)')
+    else:
+        lines.append(f'cmd.load({_py_literal(os.path.abspath(map_path))}, "emap")')
+    lines += [
+        f'cmd.isomesh("dens", "emap", {level}, {_py_literal(carve_target)}, carve={carve})',
+        'cmd.color("gray70", "dens")',
+        'cmd.hide("everything", "struct")',
+        'cmd.show("cartoon", "struct")',
+        _color_script(color, "struct"),
+    ]
+    if sel:
+        lines += [
+            'cmd.set("cartoon_transparency", 0.6, "struct")',
+            f'cmd.show("sticks", {_py_literal(sel)})',
+            f'util.cnc({_py_literal(sel)})',
+        ]
+    lines.append(_preset_script(preset))
+    if sel:
+        lines += [f'cmd.orient({_py_literal(sel)})', f'cmd.zoom({_py_literal(sel)}, 6)']
+    else:
+        lines.append('cmd.orient("struct")')
+    lines += [
+        f'cmd.ray({width}, {height})',
+        f'cmd.png({_py_literal(abs_out)})',
+        f'_output["data"]["rendered"] = {_py_literal(abs_out)}',
+    ]
+    result = run_pymol_script("\n".join(lines), timeout=300)
+    result = _verify_png(result, abs_out)
+    if result.get("status") == "ok":
+        result["data"]["level"] = level
+        result["data"]["carve"] = carve
+        result["data"]["simulated"] = simulate
+        if auto_level:
+            result["data"]["auto_level"] = auto_level
+    return result
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="PyMOL headless agent helper — run commands, inspect structures, render images.",
@@ -488,6 +576,21 @@ def main():
     p_pocket.add_argument("--label", action="store_true", help="Label pocket residues (resn+resi)")
     p_pocket.add_argument("--preset", default="publication", choices=["publication", "illustration", "soft"])
 
+    # density
+    p_density = sub.add_parser("density", help="Render a model in cryo-EM density (real map or --simulate)")
+    p_density.add_argument("pdb", help="Path to model (PDB/CIF)")
+    p_density.add_argument("output", nargs="?", default="/tmp/pymol_density.png", help="Output PNG path")
+    p_density.add_argument("--map", dest="map_path", help="MRC/CCP4 density map (omit with --simulate)")
+    p_density.add_argument("--simulate", action="store_true", help="Simulate gaussian density from the model")
+    p_density.add_argument("--level", type=float, help="Contour level (default: map sigma, or 1.0 simulated)")
+    p_density.add_argument("--n-sigma", type=float, default=2.0, help="Sigma multiple for auto level (default: 2)")
+    p_density.add_argument("--carve", type=float, default=2.5, help="Carve radius around the model in Angstroms")
+    p_density.add_argument("--residue", help="Residue selection to show as sticks and zoom on")
+    p_density.add_argument("--color", default="chain", help="Model color: spectrum, chain, bfactor, plddt, or a color")
+    p_density.add_argument("--width", type=int, default=1200)
+    p_density.add_argument("--height", type=int, default=900)
+    p_density.add_argument("--preset", default="publication", choices=["publication", "illustration", "soft"])
+
     # spin
     p_spin = sub.add_parser("spin", help="Render a 360-degree turntable movie (frames -> ffmpeg)")
     p_spin.add_argument("pdb", help="Path to structure file")
@@ -512,6 +615,10 @@ def main():
     elif args.command == "pocket":
         result = render_pocket(args.pdb, args.output, args.ligand, args.radius,
                                args.width, args.height, args.label, args.preset)
+    elif args.command == "density":
+        result = render_density(args.pdb, args.output, args.map_path, args.simulate,
+                                args.level, args.n_sigma, args.carve, args.residue,
+                                args.color, args.width, args.height, args.preset)
     elif args.command == "spin":
         result = render_spin(args.pdb, args.output, args.frames, args.width, args.height,
                              args.style, args.color, args.preset, args.fps)

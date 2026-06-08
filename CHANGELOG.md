@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Added a `density` subcommand to `pymol_agent.py`: render a model in cryo-EM
+  density (real `--map` or `--simulate`d gaussian density), with the mesh carved
+  around the model or a `--residue` selection and the contour level taken from
+  the map's sigma via `map_info.py`.
+- Added `SHOWCASE.md`: copy-pasteable, reproducible figures and analyses on
+  canonical public structures (every command is a real, tested code path).
+- Added a `make release-check` target: pre-publish hygiene sweep for tracked
+  structures/maps/media/secret files and large files.
 - Added `interface_report.py`: zero-dependency protein-protein interface residue
   analysis between chains (the chain-chain analog of `pocket_report.py`).
 - Added a `pocket` subcommand to `pymol_agent.py` for one-command annotated

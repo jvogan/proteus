@@ -51,6 +51,7 @@ Rosetta-oriented protein design guidance without building a custom plugin.
 - Zero-dependency protein-protein interface residue analysis between chains
 - HELIX-record injection for CA-only backbones (RFdiffusion / Genie designs) so cartoons render correctly
 - MRC/CCP4 map inspection with sigma-based contour-level suggestions
+- Cryo-EM density-fit figures (model in carved density mesh; works with a real map or simulated density)
 - AlphaFold DB fetch with confidence interpretation and pLDDT coloring
 - RCSB PDB fetch for experimental coordinates, metadata, and biological assembly mmCIF
 - UniProt lookup for resolving gene/protein names before AlphaFold fetches
@@ -173,7 +174,12 @@ python3 scripts/chimerax_agent.py align reference.pdb mobile.pdb   # structure a
 python3 scripts/chimerax_rest.py render structure.pdb out.png      # GPU render via managed REST
 python3 scripts/add_helix_records.py model.pdb --json              # fix CA-only backbone cartoons
 python3 scripts/map_info.py map.mrc --json                         # cryo-EM contour levels
+python3 scripts/pymol_agent.py density model.pdb fit.png --simulate # model in (simulated) density
 ```
+
+See [`SHOWCASE.md`](SHOWCASE.md) for end-to-end, copy-pasteable examples on
+canonical public structures (HIV protease, ACE2–RBD, hemoglobin, AlphaFold p53,
+and more).
 
 ## Layout
 
@@ -223,7 +229,8 @@ Helper scripts emit machine-readable JSON, with human-readable text as a fallbac
 ## Test
 
 ```bash
-make test
+make test            # run the unit tests
+make release-check   # pre-publish hygiene sweep (no tracked structures/maps/media/secrets, no large files)
 ```
 
 ## Safety And Privacy
