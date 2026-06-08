@@ -171,6 +171,20 @@ class ScriptTests(unittest.TestCase):
         result = pymol_agent.render_pocket("tests/fixtures/does_not_exist.pdb", "out.png")
         self.assertEqual(result["status"], "error")
 
+    def test_pymol_density_requires_map_or_simulate(self):
+        # Missing model file
+        self.assertEqual(
+            pymol_agent.render_density("tests/fixtures/missing.pdb", "out.png", simulate=True)["status"],
+            "error")
+        # Neither --map nor --simulate
+        result = pymol_agent.render_density("tests/fixtures/tiny.pdb", "out.png")
+        self.assertEqual(result["status"], "error")
+        self.assertIn("simulate", result["error"])
+        # Map path that does not exist
+        self.assertEqual(
+            pymol_agent.render_density("tests/fixtures/tiny.pdb", "out.png", map_path="nope.mrc")["status"],
+            "error")
+
     def test_map_info_sigma_from_synthetic_mrc(self):
         nx = ny = nz = 4
         vals = [float(i % 7) for i in range(nx * ny * nz)]

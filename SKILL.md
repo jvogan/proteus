@@ -106,7 +106,7 @@ debugging, patching, or the help text is insufficient for the task.
 | `scripts/pocket_report.py` | Zero-dep ligand pocket contacts from PDB/PDB ID | `python3 scripts/pocket_report.py 1HSG --json` |
 | `scripts/interface_report.py` | Zero-dep protein-protein interface residues between chains | `python3 scripts/interface_report.py 1BRS --chains A,D --json` |
 | `scripts/compare_structures.py` | PyMOL CE alignment + optional per-residue deviations | `python3 scripts/compare_structures.py ref.pdb mobile.pdb --json` |
-| `scripts/pymol_agent.py` | Headless PyMOL driver (info, render, **pocket figure, spin movie**) | `python3 scripts/pymol_agent.py render structure.pdb out.png --color plddt` |
+| `scripts/pymol_agent.py` | Headless PyMOL driver (info, render, **pocket figure, density fit, spin movie**) | `python3 scripts/pymol_agent.py render structure.pdb out.png --color plddt` |
 | `scripts/chimerax_agent.py` | Headless ChimeraX driver (analysis, `--nogui`) | `python3 scripts/chimerax_agent.py run "open 1ubq; info chains #1"` |
 | `scripts/chimerax_rest.py` | Managed ChimeraX REST GUI render (GPU) + turntable | `python3 scripts/chimerax_rest.py render structure.pdb out.png --color plddt` |
 | `scripts/add_helix_records.py` | Add HELIX records to CA-only backbones so cartoons render | `python3 scripts/add_helix_records.py model.pdb --json` |
@@ -349,10 +349,17 @@ python3 scripts/add_helix_records.py model.pdb -o model_ss.pdb --json
 # Then render model_ss.pdb; in PyMOL also: set cartoon_trace_atoms, 1
 ```
 
-### Cryo-EM Contour Level
+### Cryo-EM Density Fit
 ```bash
-# Sigma-based level for `volume`/`isomesh` (absolute level differs per map).
+# Sigma-based contour level (absolute level differs per map).
 python3 scripts/map_info.py map.mrc --json   # -> suggested_level at 1/1.5/2/3 sigma
+
+# Render a model in density — the mesh is carved around the model, which avoids
+# the whole-map contour stall in headless PyMOL (gotcha 20).
+python3 scripts/pymol_agent.py density model.pdb fit.png --map map.mrc --residue "chain A and resi 25"
+
+# No map yet? Simulate gaussian density from the model (predicted/designed structures).
+python3 scripts/pymol_agent.py density model.pdb fit.png --simulate
 ```
 
 ## Good Demo Proteins
@@ -414,6 +421,7 @@ For multi-step workflows, write a summary JSON report at the end with:
 | Render via ChimeraX GPU (REST) | `python3 scripts/chimerax_rest.py render file.pdb out.png` |
 | Fix a CA-only backbone for cartoons | `python3 scripts/add_helix_records.py model.pdb` |
 | Pick a cryo-EM contour level | `python3 scripts/map_info.py map.mrc --json` |
+| Render a model in cryo-EM density | `python3 scripts/pymol_agent.py density model.pdb out.png --map map.mrc` |
 | Fetch an AlphaFold prediction | `python3 scripts/fetch_alphafold.py UNIPROT_ID --pae --json` |
 | Align two structures (ChimeraX) | `python3 scripts/chimerax_agent.py align ref.pdb mobile.pdb` |
 | Measure SASA | `python3 scripts/chimerax_agent.py sasa file.pdb` |

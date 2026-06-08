@@ -316,6 +316,14 @@ and can hang in headless PyMOL (the headless build lacks the VTKm accelerator) â
 do whole-map surfaces in ChimeraX instead. Use `scripts/map_info.py` to choose a
 sigma-based contour level (absolute levels differ per map).
 
+`pymol_agent.py density` packages this: `density model.pdb out.png --map map.mrc
+--residue "chain A and resi 25"` carves the mesh around the residue and zooms on
+it; `--simulate` generates the gaussian density when there is no experimental map.
+
+> Object naming: `model` is a reserved word in PyMOL's selection language â€”
+> loading an object as `model` makes later selections fail with "Invalid
+> selection". Use a name like `struct` or `mol` instead.
+
 ## Publication Settings
 
 Standard block for high-quality renders:
