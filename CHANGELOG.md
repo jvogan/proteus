@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Added `interface_report.py`: zero-dependency protein-protein interface residue
+  analysis between chains (the chain-chain analog of `pocket_report.py`).
+- Added a `pocket` subcommand to `pymol_agent.py` for one-command annotated
+  binding-pocket figures (ligand + pocket sticks + polar contacts + transparent
+  context), and a non-empty-PNG guard so renders fail loudly instead of blank.
+- Improved turntable framing: orthoscopic, bounding-sphere fit, and a widened
+  depth slab so the structure never clips mid-rotation.
 - Added `chimerax_rest.py`: a managed ChimeraX REST renderer that launches a GUI
   session on an ephemeral port, renders via GPU, defeats the 0-byte-PNG save
   race, and guarantees teardown.

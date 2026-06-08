@@ -277,6 +277,21 @@ if stored_b:
     return run_pymol_script(script)
 
 
+def _verify_png(result: dict, output_path: str) -> dict:
+    """Downgrade an 'ok' result to error if the PNG is missing or empty.
+
+    PyMOL can return without writing pixels (an empty selection, a silently
+    failed render). Fail loudly instead of reporting a blank success.
+    """
+    if result.get("status") != "ok":
+        return result
+    if not os.path.exists(output_path) or os.path.getsize(output_path) == 0:
+        return {"status": "error",
+                "error": f"Render produced no image (empty or missing file: {output_path})",
+                "data": result.get("data", {})}
+    return result
+
+
 def render_structure(pdb_path: str, output_png: str, width: int = 1200, height: int = 900,
                      style: str = "cartoon", color: str = "spectrum",
                      preset: str = "publication") -> dict:
@@ -309,7 +324,8 @@ cmd.png({_py_literal(abs_out)})
 _output["data"]["rendered"] = {_py_literal(abs_out)}
 _output["data"]["size"] = "{width}x{height}"
 '''
-    return run_pymol_script(script, timeout=300)  # Rendering can take longer
+    result = run_pymol_script(script, timeout=300)  # Rendering can take longer
+    return _verify_png(result, abs_out)
 
 
 def render_spin(pdb_path: str, output: str, frames: int = 60, width: int = 800,
@@ -340,7 +356,17 @@ cmd.show({_py_literal(style)}, "all")
 {_color_script(color)}
 {_preset_script(preset)}
 cmd.set("cache_frames", 0)   # else PyMOL caches every frame in RAM -> OOM on long spins
+cmd.set("orthoscopic", 1)    # stable apparent size through the rotation
 cmd.orient()
+# No-clip framing: fit the bounding SPHERE (rotation-invariant) and widen the
+# depth slab so nothing clips as wide axes rotate toward the camera.
+cmd.zoom("all", buffer=4, complete=1)
+_ext = cmd.get_extent("all")
+if _ext:
+    _dx = _ext[1][0] - _ext[0][0]
+    _dy = _ext[1][1] - _ext[0][1]
+    _dz = _ext[1][2] - _ext[0][2]
+    cmd.clip("slab", (_dx * _dx + _dy * _dy + _dz * _dz) ** 0.5 * 1.6)
 _n = {frames}
 for _i in range(_n):
     cmd.ray({width}, {height})
@@ -368,14 +394,67 @@ _output["data"]["frames"] = _n
     }}
 
 
+def render_pocket(pdb_path: str, output: str, ligand: str = "organic", radius: float = 5.0,
+                  width: int = 1200, height: int = 900, label: bool = False,
+                  preset: str = "publication") -> dict:
+    """Render an annotated binding-pocket figure.
+
+    Shows the ligand and the residues within `radius` as sticks with polar
+    contacts drawn, the rest of the protein as a transparent cartoon for
+    context, framed on the pocket. `ligand` is any PyMOL selection (default:
+    `organic`, i.e. non-polymer/non-solvent ligands).
+    """
+    if not PYMOL:
+        return {"status": "error", "error": "PyMOL not found. Install it or set PYMOL_BIN."}
+    if not os.path.isfile(pdb_path):
+        return {"status": "error", "error": f"Structure file not found: {pdb_path}"}
+
+    abs_pdb = os.path.abspath(pdb_path)
+    abs_out = os.path.abspath(output)
+    label_cmd = 'cmd.label("pocket and name CA", "resn+resi")' if label else ""
+    script = f'''
+cmd.load({_py_literal(abs_pdb)}, "struct")
+cmd.select("ligand", "(%s)" % {_py_literal(ligand)})
+if cmd.count_atoms("ligand") == 0:
+    raise RuntimeError("No ligand atoms matched selection %r; pass --ligand" % {_py_literal(ligand)})
+cmd.select("pocket", "byres (polymer within {radius} of ligand)")
+cmd.hide("everything")
+cmd.show("cartoon", "polymer")
+cmd.set("cartoon_transparency", 0.55)
+cmd.show("sticks", "pocket")
+cmd.show("sticks", "ligand")
+cmd.set("stick_radius", 0.18, "pocket")
+cmd.color("gray70", "pocket and elem C")
+cmd.color("yellow", "ligand and elem C")
+cmd.do("util.cnc('pocket or ligand')")
+cmd.distance("contacts", "ligand", "pocket", 3.5, mode=2)
+cmd.set("dash_color", "yellow")
+cmd.set("dash_width", 2.5)
+cmd.hide("labels", "contacts")
+{label_cmd}
+{_preset_script(preset)}
+cmd.orient("ligand")
+cmd.zoom("ligand", {radius} + 3)
+cmd.ray({width}, {height})
+cmd.png({_py_literal(abs_out)})
+_output["data"]["rendered"] = {_py_literal(abs_out)}
+_output["data"]["ligand_selection"] = {_py_literal(ligand)}
+_output["data"]["ligand_atoms"] = cmd.count_atoms("ligand")
+_output["data"]["pocket_residues"] = cmd.count_atoms("pocket and name CA")
+'''
+    result = run_pymol_script(script, timeout=300)
+    return _verify_png(result, abs_out)
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="PyMOL headless agent helper — run commands, inspect structures, render images.",
         epilog="Examples:\n"
                "  %(prog)s run 'fetch 1ubq; show cartoon'\n"
                "  %(prog)s info structure.pdb\n"
-               "  %(prog)s render structure.pdb output.png\n"
-               "  %(prog)s render structure.pdb output.png --style surface --color chain",
+               "  %(prog)s render structure.pdb output.png --color plddt\n"
+               "  %(prog)s pocket 1HSG.pdb pocket.png --label\n"
+               "  %(prog)s spin structure.pdb spin.mp4 --frames 60",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     sub = parser.add_subparsers(dest="command", required=True)
@@ -398,6 +477,17 @@ def main():
     p_render.add_argument("--color", default="spectrum", help="spectrum, bfactor, chain, plddt, or PyMOL color name")
     p_render.add_argument("--preset", default="publication", choices=["publication", "illustration", "soft"])
 
+    # pocket
+    p_pocket = sub.add_parser("pocket", help="Render an annotated binding-pocket figure")
+    p_pocket.add_argument("pdb", help="Path to structure file")
+    p_pocket.add_argument("output", nargs="?", default="/tmp/pymol_pocket.png", help="Output PNG path")
+    p_pocket.add_argument("--ligand", default="organic", help="Ligand selection (default: organic)")
+    p_pocket.add_argument("--radius", type=float, default=5.0, help="Pocket radius in Angstroms (default: 5)")
+    p_pocket.add_argument("--width", type=int, default=1200)
+    p_pocket.add_argument("--height", type=int, default=900)
+    p_pocket.add_argument("--label", action="store_true", help="Label pocket residues (resn+resi)")
+    p_pocket.add_argument("--preset", default="publication", choices=["publication", "illustration", "soft"])
+
     # spin
     p_spin = sub.add_parser("spin", help="Render a 360-degree turntable movie (frames -> ffmpeg)")
     p_spin.add_argument("pdb", help="Path to structure file")
@@ -419,6 +509,9 @@ def main():
     elif args.command == "render":
         result = render_structure(args.pdb, args.output, args.width, args.height,
                                   args.style, args.color, args.preset)
+    elif args.command == "pocket":
+        result = render_pocket(args.pdb, args.output, args.ligand, args.radius,
+                               args.width, args.height, args.label, args.preset)
     elif args.command == "spin":
         result = render_spin(args.pdb, args.output, args.frames, args.width, args.height,
                              args.style, args.color, args.preset, args.fps)

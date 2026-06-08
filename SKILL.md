@@ -104,8 +104,9 @@ debugging, patching, or the help text is insufficient for the task.
 | `scripts/pae_report.py` | Summarize AlphaFold PAE domain/flexibility hints | `python3 scripts/pae_report.py AF-P04637-F1_pae.json --json` |
 | `scripts/validation_report.py` | Fetch wwPDB/RCSB validation quality metrics | `python3 scripts/validation_report.py 4HHB --json` |
 | `scripts/pocket_report.py` | Zero-dep ligand pocket contacts from PDB/PDB ID | `python3 scripts/pocket_report.py 1HSG --json` |
+| `scripts/interface_report.py` | Zero-dep protein-protein interface residues between chains | `python3 scripts/interface_report.py 1BRS --chains A,D --json` |
 | `scripts/compare_structures.py` | PyMOL CE alignment + optional per-residue deviations | `python3 scripts/compare_structures.py ref.pdb mobile.pdb --json` |
-| `scripts/pymol_agent.py` | Headless PyMOL driver (info, render, **spin movie**) | `python3 scripts/pymol_agent.py render structure.pdb out.png --color plddt` |
+| `scripts/pymol_agent.py` | Headless PyMOL driver (info, render, **pocket figure, spin movie**) | `python3 scripts/pymol_agent.py render structure.pdb out.png --color plddt` |
 | `scripts/chimerax_agent.py` | Headless ChimeraX driver (analysis, `--nogui`) | `python3 scripts/chimerax_agent.py run "open 1ubq; info chains #1"` |
 | `scripts/chimerax_rest.py` | Managed ChimeraX REST GUI render (GPU) + turntable | `python3 scripts/chimerax_rest.py render structure.pdb out.png --color plddt` |
 | `scripts/add_helix_records.py` | Add HELIX records to CA-only backbones so cartoons render | `python3 scripts/add_helix_records.py model.pdb --json` |
@@ -272,9 +273,22 @@ Then color by pLDDT bins — see `references/alphafold.md` for the standard colo
 4. Extract per-residue deviations with `iterate_state`
 5. Render side-by-side or overlay
 
+### Protein-Protein Interface Analysis
+```bash
+# Zero-dependency: interface residues between chains, JSON for chaining
+python3 scripts/interface_report.py complex.pdb --json            # all chain pairs
+python3 scripts/interface_report.py 1BRS --chains A,D --cutoff 4.5 --json
+```
+For a visual interface dissection (contacts/H-bonds/buried surface), use
+ChimeraX — see `references/chimerax.md`.
+
 ### Binding Pocket Analysis
+```bash
+# One-command annotated figure: ligand + pocket sticks + polar contacts + context
+python3 scripts/pymol_agent.py pocket 1HSG.pdb pocket.png --label
+```
 ```python
-# PyMOL: select residues within 5A of any ligand
+# Or build it by hand. PyMOL: select residues within 5A of any ligand
 cmd.select("pocket", "byres organic around 5")
 # Show pocket as sticks, ligand as ball-and-stick
 cmd.show("sticks", "pocket")
@@ -391,9 +405,11 @@ For multi-step workflows, write a summary JSON report at the end with:
 | Summarize AlphaFold PAE | `python3 scripts/pae_report.py AF-P04637-F1_pae.json --json` |
 | Fetch validation metrics | `python3 scripts/validation_report.py 4HHB --json` |
 | Report ligand pocket contacts | `python3 scripts/pocket_report.py 1HSG --json` |
+| Report protein-protein interface residues | `python3 scripts/interface_report.py complex.pdb --json` |
 | Compare two structures | `python3 scripts/compare_structures.py ref.pdb mobile.pdb --per-residue --json` |
 | Get structure info via PyMOL | `python3 scripts/pymol_agent.py info file.pdb` |
 | Render a structure headless | `python3 scripts/pymol_agent.py render file.pdb out.png` |
+| Render an annotated binding-pocket figure | `python3 scripts/pymol_agent.py pocket file.pdb out.png --label` |
 | Render a turntable movie | `python3 scripts/pymol_agent.py spin file.pdb out.mp4` |
 | Render via ChimeraX GPU (REST) | `python3 scripts/chimerax_rest.py render file.pdb out.png` |
 | Fix a CA-only backbone for cartoons | `python3 scripts/add_helix_records.py model.pdb` |
