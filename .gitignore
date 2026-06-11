@@ -27,6 +27,10 @@ AF-*_pae.json
 /scripts/*.png
 banners/
 
+# Generated dossiers (figures + report; regenerate with scripts/kras_dossier.py)
+/kras_g12c_dossier/
+/*_dossier/
+
 # Sequences and model weights
 *.fasta
 *.fa

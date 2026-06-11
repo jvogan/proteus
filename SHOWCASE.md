@@ -105,6 +105,26 @@ python3 scripts/pymol_agent.py render 1HSG.pdb hiv_illustration.png --preset ill
 **Shows:** the same structures in the neutral-background `soft` preset and the
 outlined `illustration` (molecular-illustration) style.
 
+## 9. End-to-end target dossier — KRAS G12C (the "epic" demo)
+
+```bash
+# Discover the structural landscape (200+ KRAS structures in the PDB)
+python3 scripts/pdb_search.py --uniprot P01116 --rows 50 --details
+
+# Build the full dossier: fetch ~9 structures, run every analysis,
+# render the figure gallery + turntable, assemble a Markdown report
+python3 scripts/kras_dossier.py --out kras_g12c_dossier
+```
+
+**Shows:** a single command that reproduces a day's worth of manual structural
+review. It walks the KRAS G12C story end to end — the AlphaFold model (ordered
+G-domain vs. disordered membrane-anchoring tail), the GTP/GDP conformational
+switch (CE-align localizing the motion to Switch I/II), a four-structure
+covalent-inhibitor timeline from chemical probe to approved drug (sotorasib,
+adagrasib) in the cryptic switch-II pocket, and the SOS1/RAF protein interfaces
+— then writes it all up as `DOSSIER.md` with embedded figures and a turntable
+movie. A worked example of chaining the helper scripts into one analysis.
+
 ---
 
 For the full command surface, see [`SKILL.md`](SKILL.md). For tool-specific
