@@ -15,6 +15,27 @@ import json
 import os
 import sys
 from collections import defaultdict
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def _display_path(path: str | Path | None) -> str | None:
+    if path is None:
+        return None
+    candidate = Path(path).expanduser()
+    try:
+        resolved = candidate.resolve(strict=False)
+    except OSError:
+        resolved = candidate.absolute()
+    for root in (ROOT, Path.cwd()):
+        try:
+            relative = resolved.relative_to(root.resolve())
+            return f"./{relative}" if str(relative) != "." else "."
+        except ValueError:
+            continue
+    return f"{resolved.name} (absolute path omitted)"
 
 
 def parse_pdb(path: str, as_json: bool = False, force_alphafold: bool = False):
@@ -35,14 +56,14 @@ def parse_pdb(path: str, as_json: bool = False, force_alphafold: bool = False):
     try:
         fh = open(path)
     except FileNotFoundError:
-        msg = f"File not found: {path}"
+        msg = f"File not found: {_display_path(path)}"
         if as_json:
             print(json.dumps({"status": "error", "error": msg}))
         else:
             print(f"ERROR: {msg}", file=sys.stderr)
         sys.exit(1)
     except PermissionError:
-        msg = f"Permission denied: {path}"
+        msg = f"Permission denied: {_display_path(path)}"
         if as_json:
             print(json.dumps({"status": "error", "error": msg}))
         else:
@@ -108,7 +129,7 @@ def parse_pdb(path: str, as_json: bool = False, force_alphafold: bool = False):
 
     if as_json:
         data = {
-            "file": path,
+            "file": _display_path(path),
             "title": title,
             "chains": sorted_chains,
             "chain_details": chain_info,
@@ -123,7 +144,7 @@ def parse_pdb(path: str, as_json: bool = False, force_alphafold: bool = False):
         output.update(data)
         print(json.dumps(output, indent=2))
     else:
-        print(f"File: {path}")
+        print(f"File: {_display_path(path)}")
         print(f"Title: {title}")
         print(f"Chains: {sorted_chains}")
         print(f"ATOM records: {atom_count}")

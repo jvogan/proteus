@@ -1,6 +1,5 @@
 ---
 name: proteus
-license: MIT
 description: >
   Use this skill when the user asks you to work with protein structures,
   molecular visualization, or structural biology tools. TRIGGER when:
@@ -61,10 +60,16 @@ fit the task; otherwise tell the user what to install and stop.
 | Structure alignment + RMSD | **Either** | PyMOL `cealign` or ChimeraX `matchmaker` |
 | AlphaFold confidence analysis | **PyMOL** + AlphaFold API | Fetch prediction, color by pLDDT, render headless |
 | Experimental PDB download | **`fetch_pdb.py`** | RCSB metadata + coordinates |
+| Structure landscape search | **`pdb_search.py`** | Enumerate PDB hits by text and/or UniProt accession |
+| Structure candidate ranking | **`pdb_select.py`** | Rank hits by method, resolution, validation, assemblies, and ligands |
 | Protein name -> accession | **`uniprot_lookup.py`** | Resolve names/genes before AlphaFold fetch |
 | PDB/mmCIF preflight | **`structure_info.py`** | Zero-dependency file inspection |
+| Target dossier/report | **`target_dossier.py`** | Markdown + JSON provenance for targets, with opt-in local analyses |
+| Structural mutation triage | **`mutation_triage.py`** | Local variant proximity to ligands, interfaces, contacts, and PAE context |
+| Docking box prep | **`docking_box.py`** | Ligand-centered Vina box plus optional docking-tool detection |
 | Cryo-EM density map visualization | **ChimeraX REST API** | Volume rendering requires GPU/display |
 | Quick legacy PDB inspection | **`pdb_info.py` script** | Backward-compatible PDB-only inspector |
+| KRAS G12C dossier | **`kras_dossier.py`** | End-to-end workflow with public structures, analyses, and figures |
 | Protein design / scoring | **Rosetta/PyRosetta** | Or ML alternatives (ProteinMPNN, RFdiffusion) |
 
 **Key architectural insight:** ChimeraX `--nogui` mode has NO OpenGL context on macOS.
@@ -98,20 +103,39 @@ debugging, patching, or the help text is insufficient for the task.
 | `scripts/proteus_doctor.py` | Local readiness report for tools, scripts, and APIs | `python3 scripts/proteus_doctor.py --network --json` |
 | `scripts/resolve_structure.py` | Resolve file/PDB/UniProt/name to structure + provenance | `python3 scripts/resolve_structure.py TP53 --json` |
 | `scripts/fetch_pdb.py` | RCSB PDB metadata + coordinate fetcher | `python3 scripts/fetch_pdb.py 4HHB --json` |
+| `scripts/assembly_report.py` | RCSB biological assembly counts, filenames, URLs, and optional assembly mmCIF download | `python3 scripts/assembly_report.py 4HHB --json` |
+| `scripts/pdb_search.py` | Search RCSB PDB by free text and/or UniProt accession | `python3 scripts/pdb_search.py "KRAS G12C" --rows 10 --details --json` |
+| `scripts/pdb_select.py` | Rank/select candidate structures from offline metadata or opt-in RCSB lookup | `python3 scripts/pdb_select.py --input candidates.json --json` |
+| `scripts/sifts_map.py` | PDBe SIFTS residue mapping between PDB chains and UniProt ranges | `python3 scripts/sifts_map.py pdb 1hsg --json` |
+| `scripts/ligand_extract.py` | Zero-dep non-water ligand inventory from PDB/mmCIF and optional CCD downloads | `python3 scripts/ligand_extract.py 1HSG --json` |
+| `scripts/dock_prep.py` | Non-executing receptor/ligand prep plan with optional tool detection | `python3 scripts/dock_prep.py --receptor receptor.pdb --ligand ligand.sdf --json` |
+| `scripts/docking_box.py` | Ligand-centered PDB/mmCIF Vina-style box and optional docking-tool detection | `python3 scripts/docking_box.py complex.cif --ligand ATP --json` |
+| `scripts/dock_vina.py` | Dry-run Vina-compatible docking command planner and log parser | `python3 scripts/dock_vina.py plan --receptor receptor.pdbqt --ligand ligand.pdbqt --config box.txt --json` |
+| `scripts/interaction_report.py` | Simple PDB/mmCIF protein-ligand interaction/contact classes plus PLIP/ProLIF detection | `python3 scripts/interaction_report.py complex.cif --ligand ATP --json` |
+| `scripts/variant_map.py` | Conservative protein substitution parser plus optional local coordinate lookup | `python3 scripts/variant_map.py "P04637 R175H" --no-download --json` |
+| `scripts/mutation_triage.py` | Local structural triage of substitutions against ligands, chains, contacts, and PAE | `python3 scripts/mutation_triage.py R175H --structure model.pdb --json` |
+| `scripts/proteus_batch.py` | Run allowlisted helper scripts from a JSON manifest | `python3 scripts/proteus_batch.py manifest.json --dry-run --json` |
+| `scripts/proteus_cache.py` | Local URL cache with checksums, offline mode, verify, and garbage collection | `python3 scripts/proteus_cache.py show --json` |
+| `scripts/proteus_report.py` | Combine helper JSON into Markdown and scrubbed report JSON evidence packs | `python3 scripts/proteus_report.py --input result.json --json` |
+| `scripts/target_dossier.py` | Generic target dossier with Markdown, JSON provenance, and opt-in local analyses | `python3 scripts/target_dossier.py --uniprot P04637 --no-network --json` |
 | `scripts/uniprot_lookup.py` | Protein/gene name to UniProt accession | `python3 scripts/uniprot_lookup.py TP53 --gene-exact --json` |
 | `scripts/structure_info.py` | Zero-dep PDB/mmCIF inspector | `python3 scripts/structure_info.py structure.cif --json` |
 | `scripts/fetch_alphafold.py` | AlphaFold DB fetcher | `python3 scripts/fetch_alphafold.py P04637 --pae --json` |
 | `scripts/pae_report.py` | Summarize AlphaFold PAE domain/flexibility hints | `python3 scripts/pae_report.py AF-P04637-F1_pae.json --json` |
 | `scripts/validation_report.py` | Fetch wwPDB/RCSB validation quality metrics | `python3 scripts/validation_report.py 4HHB --json` |
-| `scripts/pocket_report.py` | Zero-dep ligand pocket contacts from PDB/PDB ID | `python3 scripts/pocket_report.py 1HSG --json` |
-| `scripts/interface_report.py` | Zero-dep protein-protein interface residues between chains | `python3 scripts/interface_report.py 1BRS --chains A,D --json` |
+| `scripts/pocket_report.py` | Zero-dep ligand pocket contacts from local PDB/mmCIF or PDB ID | `python3 scripts/pocket_report.py complex.cif --json` |
+| `scripts/interface_report.py` | Zero-dep protein-protein interface residues from local PDB/mmCIF or PDB ID | `python3 scripts/interface_report.py 1BRS --chains A,D --json` |
 | `scripts/compare_structures.py` | PyMOL CE alignment + optional per-residue deviations | `python3 scripts/compare_structures.py ref.pdb mobile.pdb --json` |
 | `scripts/pymol_agent.py` | Headless PyMOL driver (info, render, **pocket figure, density fit, spin movie**) | `python3 scripts/pymol_agent.py render structure.pdb out.png --color plddt` |
 | `scripts/chimerax_agent.py` | Headless ChimeraX driver (analysis, `--nogui`) | `python3 scripts/chimerax_agent.py run "open 1ubq; info chains #1"` |
 | `scripts/chimerax_rest.py` | Managed ChimeraX REST GUI render (GPU) + turntable | `python3 scripts/chimerax_rest.py render structure.pdb out.png --color plddt` |
 | `scripts/add_helix_records.py` | Add HELIX records to CA-only backbones so cartoons render | `python3 scripts/add_helix_records.py model.pdb --json` |
 | `scripts/map_info.py` | MRC/CCP4 map stats + sigma-based contour levels | `python3 scripts/map_info.py map.mrc --json` |
+| `scripts/model_quality.py` | Detect optional quality tools and parse/run USalign when installed | `python3 scripts/model_quality.py detect --json` |
+| `scripts/design_run.py` | Validate design manifests and write dry-run modeling/design plans | `python3 scripts/design_run.py manifest.json --dry-run --json` |
+| `scripts/rosetta_score.py` | Detect Rosetta/PyRosetta, parse scorefiles, and plan dry scoring commands | `python3 scripts/rosetta_score.py detect --json` |
 | `scripts/pdb_info.py` | Legacy zero-dep PDB inspector (PDB only) | `python3 scripts/pdb_info.py structure.pdb` |
+| `scripts/kras_dossier.py` | KRAS G12C dossier workflow over public structures | `python3 scripts/kras_dossier.py --out kras_g12c_dossier --no-movie` |
 
 ## Critical Gotchas (Read This First)
 
@@ -253,7 +277,38 @@ python3 scripts/pymol_agent.py info structure.pdb       # detailed with PyMOL
 ```bash
 python3 scripts/fetch_pdb.py 4HHB --json                # RCSB metadata + mmCIF
 python3 scripts/fetch_pdb.py 1HSG --format pdb          # legacy PDB format if needed
+python3 scripts/assembly_report.py 4HHB --json          # assembly counts + download URLs
 python3 scripts/fetch_pdb.py 4HHB --assembly 1 --json   # biological assembly mmCIF
+```
+
+### Structure Landscape Search
+```bash
+python3 scripts/pdb_search.py "KRAS G12C sotorasib" --rows 10 --details --json
+python3 scripts/pdb_search.py --uniprot P01116 --rows 50 --details --json
+python3 scripts/pdb_select.py --input candidates.json --ligand GDP --json
+```
+
+### Residue Mapping, Variants, And Ligands
+```bash
+python3 scripts/sifts_map.py pdb 1hsg --json
+python3 scripts/variant_map.py "P04637 R175H" --no-download --json
+python3 scripts/mutation_triage.py R175H --uniprot P04637 --structure model.pdb --json
+python3 scripts/ligand_extract.py 1HSG --json
+python3 scripts/dock_prep.py --receptor receptor.pdb --ligand ligand.sdf --json
+python3 scripts/docking_box.py complex.pdb --ligand ATP --json
+python3 scripts/dock_vina.py plan --receptor receptor.pdbqt --ligand ligand.pdbqt --config box.txt --json
+python3 scripts/interaction_report.py complex.pdb --ligand ATP --json
+```
+
+### Dossiers And Batch Runs
+```bash
+python3 scripts/target_dossier.py --gene TP53 --uniprot P04637 --pdb 1TUP --json
+python3 scripts/target_dossier.py --pdb tests/fixtures/tiny.pdb --no-network --json
+python3 scripts/target_dossier.py --pdb tests/fixtures/tiny.pdb --no-network --analyze-local --json
+python3 scripts/proteus_batch.py manifest.json --dry-run --json
+python3 scripts/proteus_report.py --input result.json --outdir proteus_report_out --json
+python3 scripts/proteus_cache.py verify --json
+python3 scripts/design_run.py design_manifest.json --dry-run --json
 ```
 
 ### AlphaFold Confidence Analysis
@@ -273,11 +328,22 @@ Then color by pLDDT bins — see `references/alphafold.md` for the standard colo
 4. Extract per-residue deviations with `iterate_state`
 5. Render side-by-side or overlay
 
+When external quality tools are installed, use `scripts/model_quality.py` to
+detect them or parse/run USalign:
+
+```bash
+python3 scripts/model_quality.py detect --json
+python3 scripts/model_quality.py usalign reference.pdb mobile.pdb --json
+python3 scripts/rosetta_score.py detect --json
+python3 scripts/rosetta_score.py parse-scorefile score.sc --json
+```
+
 ### Protein-Protein Interface Analysis
 ```bash
 # Zero-dependency: interface residues between chains, JSON for chaining
-python3 scripts/interface_report.py complex.pdb --json            # all chain pairs
+python3 scripts/interface_report.py complex.cif --json            # all chain pairs
 python3 scripts/interface_report.py 1BRS --chains A,D --cutoff 4.5 --json
+python3 scripts/interface_report.py complex.cif --residue A:42 --json
 ```
 For a visual interface dissection (contacts/H-bonds/buried surface), use
 ChimeraX — see `references/chimerax.md`.
@@ -286,6 +352,13 @@ ChimeraX — see `references/chimerax.md`.
 ```bash
 # One-command annotated figure: ligand + pocket sticks + polar contacts + context
 python3 scripts/pymol_agent.py pocket 1HSG.pdb pocket.png --label
+# Docking-box handoff around known ligand atoms
+python3 scripts/dock_prep.py --receptor receptor.pdb --ligand ligand.sdf --json
+python3 scripts/docking_box.py 1HSG --ligand MK1 --padding 6 --json
+python3 scripts/dock_vina.py plan --receptor receptor.pdbqt --ligand ligand.pdbqt --config vina_box.txt --json
+python3 scripts/dock_vina.py parse-log vina.log --json
+# Contact classes for a ligand group
+python3 scripts/interaction_report.py 1HSG --ligand MK1 --json
 ```
 ```python
 # Or build it by hand. PyMOL: select residues within 5A of any ligand
@@ -407,13 +480,32 @@ For multi-step workflows, write a summary JSON report at the end with:
 | Resolve any common structure query | `python3 scripts/resolve_structure.py TP53 --json` |
 | Resolve protein/gene name to UniProt | `python3 scripts/uniprot_lookup.py TP53 --gene-exact --json` |
 | Fetch an experimental PDB structure | `python3 scripts/fetch_pdb.py 4HHB --json` |
+| Search experimental structures | `python3 scripts/pdb_search.py "KRAS G12C" --rows 10 --details --json` |
+| Rank candidate structures | `python3 scripts/pdb_select.py --input candidates.json --json` |
+| Check biological assemblies | `python3 scripts/assembly_report.py 4HHB --json` |
+| Map PDB residues to UniProt ranges | `python3 scripts/sifts_map.py pdb 1hsg --json` |
+| Inventory bound ligands | `python3 scripts/ligand_extract.py 1HSG --json` |
+| Plan receptor/ligand docking prep | `python3 scripts/dock_prep.py --receptor receptor.pdb --ligand ligand.sdf --json` |
+| Build a docking box around a ligand | `python3 scripts/docking_box.py complex.pdb --ligand ATP --json` |
+| Plan or parse Vina-compatible docking | `python3 scripts/dock_vina.py plan --receptor receptor.pdbqt --ligand ligand.pdbqt --config box.txt --json` |
+| Summarize protein-ligand interactions | `python3 scripts/interaction_report.py complex.pdb --ligand ATP --json` |
+| Parse/check a protein substitution | `python3 scripts/variant_map.py "P04637 R175H" --no-download --json` |
+| Triage mutation structure context | `python3 scripts/mutation_triage.py R175H --structure model.pdb --json` |
+| Run a local batch manifest | `python3 scripts/proteus_batch.py manifest.json --dry-run --json` |
+| Cache public URL responses locally | `python3 scripts/proteus_cache.py fetch URL --json` |
+| Combine JSON outputs into an evidence pack | `python3 scripts/proteus_report.py --input result.json --json` |
+| Generate a target dossier | `python3 scripts/target_dossier.py --uniprot P04637 --no-network --json` |
+| Generate a local analysis dossier | `python3 scripts/target_dossier.py --pdb structure.cif --no-network --analyze-local --json` |
 | Inspect PDB/mmCIF file (no tools needed) | `python3 scripts/structure_info.py file.cif --json` |
 | Inspect a legacy PDB file | `python3 scripts/pdb_info.py file.pdb` |
 | Summarize AlphaFold PAE | `python3 scripts/pae_report.py AF-P04637-F1_pae.json --json` |
 | Fetch validation metrics | `python3 scripts/validation_report.py 4HHB --json` |
-| Report ligand pocket contacts | `python3 scripts/pocket_report.py 1HSG --json` |
-| Report protein-protein interface residues | `python3 scripts/interface_report.py complex.pdb --json` |
+| Report ligand pocket contacts | `python3 scripts/pocket_report.py complex.cif --json` |
+| Report protein-protein interface residues | `python3 scripts/interface_report.py complex.cif --json` |
 | Compare two structures | `python3 scripts/compare_structures.py ref.pdb mobile.pdb --per-residue --json` |
+| Detect optional quality tools | `python3 scripts/model_quality.py detect --json` |
+| Plan a design run | `python3 scripts/design_run.py design_manifest.json --dry-run --json` |
+| Parse Rosetta scorefiles | `python3 scripts/rosetta_score.py parse-scorefile score.sc --json` |
 | Get structure info via PyMOL | `python3 scripts/pymol_agent.py info file.pdb` |
 | Render a structure headless | `python3 scripts/pymol_agent.py render file.pdb out.png` |
 | Render an annotated binding-pocket figure | `python3 scripts/pymol_agent.py pocket file.pdb out.png --label` |
@@ -434,3 +526,4 @@ For multi-step workflows, write a summary JSON report at the end with:
 | Use RCSB/PDBe/UniProt APIs | Read `references/data-sources.md` |
 | Consider AF3/Boltz/Chai/ColabFold | Read `references/prediction-models.md` |
 | Do protein design without Rosetta | Read `references/rosetta.md` — ML Alternatives section |
+| Run the KRAS G12C dossier workflow | `python3 scripts/kras_dossier.py --out kras_g12c_dossier --no-movie` |

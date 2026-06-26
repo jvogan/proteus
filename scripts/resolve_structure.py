@@ -19,10 +19,18 @@ import re
 import sys
 from pathlib import Path
 
+import assembly_report
 import fetch_alphafold
 import fetch_pdb
 import structure_info
 import uniprot_lookup
+
+
+ROOT = Path(__file__).resolve().parents[1]
+ASYMMETRIC_UNIT_WARNING = (
+    "Downloaded RCSB default mmCIF coordinates are the deposited asymmetric unit "
+    "and may not represent the biological assembly."
+)
 
 
 def _error_payload(message: str) -> dict:
@@ -48,15 +56,78 @@ def _looks_like_uniprot(value: str) -> bool:
     ))
 
 
+def _display_path(path: str | Path | None) -> str | None:
+    if path is None:
+        return None
+    candidate = Path(path).expanduser()
+    try:
+        resolved = candidate.resolve(strict=False)
+    except OSError:
+        resolved = candidate.absolute()
+    for root in (ROOT, Path.cwd()):
+        try:
+            relative = resolved.relative_to(root.resolve())
+            return f"./{relative}" if str(relative) != "." else "."
+        except ValueError:
+            continue
+    return f"{resolved.name} (absolute path omitted)"
+
+
+def _safe_inspection(path: str | Path, *, force_alphafold: bool = False) -> dict:
+    inspection = structure_info.inspect_structure(str(path), force_alphafold=force_alphafold)
+    sanitized = dict(inspection)
+    if sanitized.get("file"):
+        sanitized["file"] = _display_path(sanitized["file"])
+    if isinstance(sanitized.get("data"), dict):
+        data = dict(sanitized["data"])
+        if data.get("file"):
+            data["file"] = _display_path(data["file"])
+        sanitized["data"] = data
+    return sanitized
+
+
+def _assembly_entry_from_metadata(metadata: dict) -> dict:
+    return {
+        "struct": {"title": metadata.get("title")},
+        "rcsb_entry_info": {
+            "assembly_count": metadata.get("assembly_count"),
+            "polymer_entity_count": metadata.get("polymer_entity_count"),
+            "deposited_atom_count": metadata.get("deposited_atom_count"),
+            "deposited_model_count": metadata.get("deposited_model_count"),
+        },
+    }
+
+
+def _biological_assembly_metadata(pdb_id: str, metadata: dict) -> dict:
+    report = assembly_report.build_report(pdb_id, _assembly_entry_from_metadata(metadata))
+    data = dict(report["data"])
+    data.pop("download", None)
+    return data
+
+
+def _assembly_warning(assembly: dict) -> str | None:
+    recommended = assembly.get("recommended_assembly")
+    if not recommended:
+        return None
+    filename = recommended.get("filename")
+    if filename:
+        return f"{ASYMMETRIC_UNIT_WARNING} RCSB biological assembly mmCIF is available as {filename}."
+    return ASYMMETRIC_UNIT_WARNING
+
+
 def _download_pdb(pdb_id: str, outdir: str, download: bool) -> dict:
     metadata = fetch_pdb.fetch_entry_metadata(pdb_id)
+    assembly = _biological_assembly_metadata(pdb_id, metadata)
     result = {
         "resolved_kind": "pdb_id",
         "source": "RCSB PDB",
         "query": pdb_id,
         "metadata": metadata,
+        "biological_assembly": assembly,
+        "download": None,
         "structure_path": None,
         "inspection": None,
+        "warnings": [],
     }
     if download:
         output_dir = Path(outdir)
@@ -64,8 +135,21 @@ def _download_pdb(pdb_id: str, outdir: str, download: bool) -> dict:
         url, filename = fetch_pdb.build_download_url(pdb_id, "cif", None, False)
         destination = output_dir / filename
         fetch_pdb.download(url, destination)
-        result["structure_path"] = str(destination.resolve())
-        result["inspection"] = structure_info.inspect_structure(str(destination))
+        safe_path = _display_path(destination)
+        result["structure_path"] = safe_path
+        result["download"] = {
+            "url": url,
+            "filename": filename,
+            "path": safe_path,
+            "format": "mmcif",
+            "assembly": None,
+            "coordinate_scope": "asymmetric_unit",
+            "bytes": destination.stat().st_size,
+        }
+        result["inspection"] = _safe_inspection(destination)
+        warning = _assembly_warning(assembly)
+        if warning:
+            result["warnings"].append(warning)
     return result
 
 
@@ -89,8 +173,8 @@ def _download_alphafold(uniprot_id: str, outdir: str, download: bool) -> dict:
         output_dir.mkdir(parents=True, exist_ok=True)
         destination = output_dir / f"{model_id}.pdb"
         fetch_alphafold.download(meta["pdbUrl"], destination, as_json=True)
-        result["structure_path"] = str(destination.resolve())
-        result["inspection"] = structure_info.inspect_structure(str(destination), force_alphafold=True)
+        result["structure_path"] = _display_path(destination)
+        result["inspection"] = _safe_inspection(destination, force_alphafold=True)
     return result
 
 
@@ -120,9 +204,9 @@ def resolve(query: str, source: str = "auto", outdir: str = ".", download: bool 
         data = {
             "resolved_kind": "local_file",
             "source": "local",
-            "query": query,
-            "structure_path": str(path.resolve()),
-            "inspection": structure_info.inspect_structure(str(path)),
+            "query": _display_path(path),
+            "structure_path": _display_path(path),
+            "inspection": _safe_inspection(path),
         }
         return _ok_payload(data)
 
@@ -164,8 +248,16 @@ def main():
         print(f"Resolved: {data['resolved_kind']} via {data['source']}")
         if data.get("structure_path"):
             print(f"Structure: {data['structure_path']}")
+        assembly = data.get("biological_assembly")
+        if assembly:
+            print(f"Biological assemblies: {assembly.get('assembly_count') or 0}")
+            recommended = assembly.get("recommended_assembly")
+            if recommended:
+                print(f"Recommended assembly: {recommended['filename']}")
         if data.get("global_plddt") is not None:
             print(f"Global pLDDT: {data['global_plddt']}")
+        for warning in data.get("warnings", []):
+            print(f"WARNING: {warning}", file=sys.stderr)
 
 
 if __name__ == "__main__":

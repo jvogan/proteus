@@ -8,7 +8,7 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/)
 [![CI](https://github.com/jvogan/proteus/actions/workflows/ci.yml/badge.svg)](https://github.com/jvogan/proteus/actions/workflows/ci.yml)
 
-**Structural biology superpowers for AI coding agents.**
+**Structural biology automation for AI coding agents.**
 
 Proteus is a structural biology agent skill and stdlib-only helper toolkit for
 [Codex](https://openai.com/index/codex/), [Claude Code](https://docs.anthropic.com/en/docs/claude-code),
@@ -54,14 +54,31 @@ Rosetta-oriented protein design guidance without building a custom plugin.
 - Cryo-EM density-fit figures (model in carved density mesh; works with a real map or simulated density)
 - AlphaFold DB fetch with confidence interpretation and pLDDT coloring
 - RCSB PDB fetch for experimental coordinates, metadata, and biological assembly mmCIF
+- RCSB PDB search by free text and/or UniProt accession
+- Candidate structure ranking by method, resolution, validation hints, assemblies, and ligands
+- Biological assembly availability reports and optional assembly mmCIF download
+- PDBe SIFTS residue mapping between PDB chains and UniProt ranges
+- Ligand inventory from local PDB/mmCIF files or PDB IDs, with optional CCD reference downloads
+- Docking prep planning for receptor/ligand files without executing chemistry tools
+- Ligand-centered PDB/mmCIF docking box generation and optional Vina/Open Babel/GNINA/RDKit detection
+- Dry-run Vina-compatible docking command planning and log parsing
+- Simple PDB/mmCIF protein-ligand interaction classes with optional PLIP/ProLIF detection
+- Conservative protein substitution parsing with optional local coordinate lookup
+- Local structural mutation triage against ligands, interfaces, close contacts, and PAE JSON
+- Local JSON-manifest batch runner for allowlisted helper scripts
+- Local URL cache and evidence-pack report combiner for reproducible outputs
+- Generic target dossiers with Markdown reports, JSON provenance, and opt-in local analyses
 - UniProt lookup for resolving gene/protein names before AlphaFold fetches
 - PDB/mmCIF inspection via `structure_info.py`
 - One-command readiness checks via `proteus_doctor.py`
 - Query resolution via `resolve_structure.py` for local files, PDB IDs, UniProt accessions, and gene/protein names
 - PAE, validation, ligand-pocket, and structure-comparison reports
+- Optional model-quality tool detection plus USalign metric parsing/running when installed
+- Dry-run design manifest planner plus Rosetta scorefile parser/scoring command planner
+- KRAS G12C dossier workflow that chains fetches, analyses, and figures from public structures
 - Rosetta/PyRosetta patterns plus ML alternatives (ProteinMPNN, ESM2)
 - Zero-dependency PDB file inspector (`pdb_info.py` — stdlib only)
-- Structured JSON output from all helper scripts, safe for parallel agent runs
+- Structured JSON output from analysis helper scripts, safe for parallel runs
 
 ## Agent Prompts That Work
 
@@ -160,12 +177,31 @@ The helper scripts also work standalone:
 python3 scripts/pdb_info.py structure.pdb                          # zero-dep PDB inspection
 python3 scripts/structure_info.py structure.cif --json             # PDB/mmCIF inspection
 python3 scripts/fetch_pdb.py 4HHB --json                           # RCSB PDB fetch
+python3 scripts/pdb_search.py "KRAS G12C" --rows 10 --details --json # RCSB search
+python3 scripts/pdb_select.py --input candidates.json --json       # candidate ranking
+python3 scripts/assembly_report.py 4HHB --json                     # biological assembly report
+python3 scripts/sifts_map.py pdb 1hsg --json                       # PDB-to-UniProt mapping
+python3 scripts/ligand_extract.py 1HSG --json                      # ligand inventory
+python3 scripts/dock_prep.py --receptor receptor.pdb --ligand ligand.sdf --json # docking prep plan
+python3 scripts/docking_box.py 1HSG --ligand MK1 --json            # ligand-centered docking box
+python3 scripts/dock_vina.py plan --receptor receptor.pdbqt --ligand ligand.pdbqt --config box.txt --json # Vina command plan
+python3 scripts/interaction_report.py 1HSG --ligand MK1 --json     # ligand interactions
+python3 scripts/variant_map.py "P04637 R175H" --no-download --json # substitution parser
+python3 scripts/mutation_triage.py R175H --structure model.pdb --json # local variant triage
+python3 scripts/proteus_batch.py manifest.json --dry-run --json    # batch manifest runner
+python3 scripts/proteus_cache.py verify --json                     # local cache integrity
+python3 scripts/proteus_report.py --input result.json --json       # evidence pack combiner
+python3 scripts/design_run.py manifest.json --dry-run --json       # design run planner
+python3 scripts/rosetta_score.py parse-scorefile score.sc --json   # Rosetta score parser
+python3 scripts/target_dossier.py --uniprot P04637 --no-network --json # dossier report
+python3 scripts/target_dossier.py --pdb tests/fixtures/tiny.cif --no-network --analyze-local --json # local analysis dossier
 python3 scripts/uniprot_lookup.py TP53 --gene-exact --json         # UniProt lookup
 python3 scripts/fetch_alphafold.py P04637 --pae --json             # AlphaFold fetch
 python3 scripts/pae_report.py AF-P04637-F1_pae.json --json         # PAE/domain hints
 python3 scripts/validation_report.py 4HHB --json                   # wwPDB validation metrics
-python3 scripts/pocket_report.py 1HSG --json                       # ligand-pocket contacts
+python3 scripts/pocket_report.py tests/fixtures/tiny.cif --json     # ligand-pocket contacts
 python3 scripts/interface_report.py 1BRS --chains A,D --json        # protein-protein interface residues
+python3 scripts/model_quality.py detect --json                     # optional quality tool detection
 python3 scripts/resolve_structure.py TP53 --json                   # one-command resolver
 python3 scripts/pymol_agent.py render structure.pdb output.png     # headless render
 python3 scripts/pymol_agent.py pocket 1HSG.pdb pocket.png --label  # annotated binding-pocket figure
@@ -175,6 +211,7 @@ python3 scripts/chimerax_rest.py render structure.pdb out.png      # GPU render 
 python3 scripts/add_helix_records.py model.pdb --json              # fix CA-only backbone cartoons
 python3 scripts/map_info.py map.mrc --json                         # cryo-EM contour levels
 python3 scripts/pymol_agent.py density model.pdb fit.png --simulate # model in (simulated) density
+python3 scripts/kras_dossier.py --out kras_g12c_dossier --no-movie  # KRAS dossier workflow
 ```
 
 See [`SHOWCASE.md`](SHOWCASE.md) for end-to-end, copy-pasteable examples on
@@ -200,22 +237,41 @@ proteus/
     ├── chimerax_agent.py
     ├── chimerax_rest.py
     ├── compare_structures.py
+    ├── design_run.py
+    ├── dock_prep.py
+    ├── dock_vina.py
+    ├── docking_box.py
     ├── fetch_pdb.py
     ├── fetch_alphafold.py
     ├── interface_report.py
+    ├── interaction_report.py
+    ├── kras_dossier.py
+    ├── assembly_report.py
+    ├── ligand_extract.py
     ├── map_info.py
+    ├── model_quality.py
+    ├── mutation_triage.py
     ├── pae_report.py
     ├── pdb_info.py
+    ├── pdb_select.py
+    ├── pdb_search.py
     ├── pocket_report.py
+    ├── proteus_batch.py
+    ├── proteus_cache.py
     ├── proteus_doctor.py
+    ├── proteus_report.py
     ├── resolve_structure.py
+    ├── rosetta_score.py
+    ├── sifts_map.py
     ├── structure_info.py
+    ├── target_dossier.py
     ├── uniprot_lookup.py
+    ├── variant_map.py
     ├── validation_report.py
     └── pymol_agent.py
 ```
 
-## Design intent
+## Design Principles
 
 The tool split is deliberate:
 

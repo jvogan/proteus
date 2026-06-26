@@ -20,6 +20,26 @@ from collections import defaultdict
 from pathlib import Path
 
 
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def _display_path(path: str | Path | None) -> str | None:
+    if path is None:
+        return None
+    candidate = Path(path).expanduser()
+    try:
+        resolved = candidate.resolve(strict=False)
+    except OSError:
+        resolved = candidate.absolute()
+    for root in (ROOT, Path.cwd()):
+        try:
+            relative = resolved.relative_to(root.resolve())
+            return f"./{relative}" if str(relative) != "." else "."
+        except ValueError:
+            continue
+    return f"{resolved.name} (absolute path omitted)"
+
+
 def _bfactor_stats(values: list[float]) -> dict:
     if not values:
         return {}
@@ -201,7 +221,7 @@ def _build_output(path: str, fmt: str, title: str | None, chains: set[str],
     }
     likely_alphafold = _is_likely_alphafold(path, b_factors, force_alphafold)
     data = {
-        "file": str(Path(path).resolve()),
+        "file": _display_path(path),
         "format": fmt,
         "title": title or "(no title)",
         "chains": sorted_chains,

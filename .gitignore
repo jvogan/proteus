@@ -31,6 +31,16 @@ banners/
 /kras_g12c_dossier/
 /*_dossier/
 
+# Generated reports, caches, and batch/download workspaces
+/.proteus-cache/
+/proteus_batch_out/
+/proteus_report_out/
+/design_run_out/
+/dock_prep_out/
+/rosetta_score_out/
+/structures/
+/ligands/
+
 # Sequences and model weights
 *.fasta
 *.fa

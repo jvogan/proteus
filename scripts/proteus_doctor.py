@@ -22,6 +22,33 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
+NETWORK_ENDPOINTS = {
+    "rcsb": "https://data.rcsb.org/rest/v1/core/entry/4HHB",
+    "uniprot": "https://rest.uniprot.org/uniprotkb/search?query=accession:P04637&format=json&size=1",
+    "alphafold": "https://alphafold.ebi.ac.uk/api/prediction/P04637",
+}
+NETWORK_CAPABILITIES = {
+    "rcsb_fetch": "rcsb",
+    "uniprot_lookup": "uniprot",
+    "alphafold_fetch": "alphafold",
+}
+
+
+def _display_path(path: str | Path | None) -> str | None:
+    if path is None:
+        return None
+    candidate = Path(path).expanduser()
+    try:
+        resolved = candidate.resolve(strict=False)
+    except OSError:
+        resolved = candidate.absolute()
+    for root in (ROOT, Path.cwd()):
+        try:
+            relative = resolved.relative_to(root.resolve())
+            return f"./{relative}" if str(relative) != "." else "."
+        except ValueError:
+            continue
+    return f"{resolved.name} (absolute path omitted)"
 
 
 def _ok_payload(data: dict) -> dict:
@@ -64,7 +91,7 @@ def _find_chimerax() -> str | None:
 
 def _python_version() -> dict:
     return {
-        "executable": sys.executable,
+        "executable": _display_path(sys.executable),
         "version": platform.python_version(),
         "ok": sys.version_info >= (3, 10),
     }
@@ -86,6 +113,21 @@ def _run_quick(cmd: list[str], timeout: int = 8) -> dict:
 def _script_smoke() -> dict:
     scripts = [
         "fetch_pdb.py",
+        "pdb_search.py",
+        "pdb_select.py",
+        "assembly_report.py",
+        "sifts_map.py",
+        "ligand_extract.py",
+        "dock_prep.py",
+        "docking_box.py",
+        "dock_vina.py",
+        "interaction_report.py",
+        "variant_map.py",
+        "mutation_triage.py",
+        "proteus_batch.py",
+        "proteus_cache.py",
+        "proteus_report.py",
+        "target_dossier.py",
         "uniprot_lookup.py",
         "structure_info.py",
         "fetch_alphafold.py",
@@ -101,6 +143,10 @@ def _script_smoke() -> dict:
         "add_helix_records.py",
         "interface_report.py",
         "map_info.py",
+        "model_quality.py",
+        "design_run.py",
+        "rosetta_score.py",
+        "kras_dossier.py",
     ]
     results = {}
     for script in scripts:
@@ -126,36 +172,37 @@ def build_report(include_network: bool) -> dict:
     pymol = _find_pymol()
     chimerax = _find_chimerax()
     ffmpeg = shutil.which("ffmpeg")
+    network = None
+    if include_network:
+        network = {name: _network_check(url) for name, url in NETWORK_ENDPOINTS.items()}
+    capabilities = {
+        "zero_dependency_inspection": True,
+        "rcsb_fetch": False,
+        "uniprot_lookup": False,
+        "alphafold_fetch": False,
+        "pymol_rendering": bool(pymol),
+        "chimerax_analysis": bool(chimerax),
+        "turntable_movies": bool((pymol or chimerax) and ffmpeg),
+    }
+    if network is not None:
+        for capability, check_name in NETWORK_CAPABILITIES.items():
+            capabilities[capability] = bool(network[check_name].get("ok"))
     data = {
-        "root": str(ROOT),
+        "root": _display_path(ROOT),
         "platform": {
             "system": platform.system(),
             "machine": platform.machine(),
         },
         "python": _python_version(),
         "tools": {
-            "pymol": {"ok": bool(pymol), "path": pymol},
-            "chimerax": {"ok": bool(chimerax), "path": chimerax},
-            "ffmpeg": {"ok": bool(ffmpeg), "path": ffmpeg},
+            "pymol": {"ok": bool(pymol), "path": _display_path(pymol)},
+            "chimerax": {"ok": bool(chimerax), "path": _display_path(chimerax)},
+            "ffmpeg": {"ok": bool(ffmpeg), "path": _display_path(ffmpeg)},
         },
         "scripts": _script_smoke(),
-        "network": None,
-        "capabilities": {
-            "zero_dependency_inspection": True,
-            "rcsb_fetch": include_network,
-            "uniprot_lookup": include_network,
-            "alphafold_fetch": include_network,
-            "pymol_rendering": bool(pymol),
-            "chimerax_analysis": bool(chimerax),
-            "turntable_movies": bool((pymol or chimerax) and ffmpeg),
-        },
+        "network": network,
+        "capabilities": capabilities,
     }
-    if include_network:
-        data["network"] = {
-            "rcsb": _network_check("https://data.rcsb.org/rest/v1/core/entry/4HHB"),
-            "uniprot": _network_check("https://rest.uniprot.org/uniprotkb/search?query=accession:P04637&format=json&size=1"),
-            "alphafold": _network_check("https://alphafold.ebi.ac.uk/api/prediction/P04637"),
-        }
     return _ok_payload(data)
 
 

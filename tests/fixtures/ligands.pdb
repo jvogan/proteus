@@ -1,0 +1,8 @@
+TITLE     LIGAND INVENTORY TEST STRUCTURE
+ATOM      1  N   GLY A   1      11.104  13.207   2.100  1.00 90.00           N
+HETATM    2  O   HOH A  10      12.000  14.000   2.000  1.00 20.00           O
+HETATM    3  C1  LIG B   2      14.000  15.000   3.000  1.00 40.00           C
+HETATM    4  O1  LIG B   2      14.500  15.250   3.200  1.00 40.00           O
+HETATM    5  S   SO4 C  42A     20.000  20.000   2.000  1.00 20.00           S
+HETATM    6  O1  SO4 C  42A     20.500  20.200   2.300  1.00 20.00           O
+END
