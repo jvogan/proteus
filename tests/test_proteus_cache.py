@@ -251,7 +251,7 @@ class ProteusCacheTests(unittest.TestCase):
                 "--cache-dir",
                 str(cache_dir),
                 "--max-age-seconds",
-                "1",
+                "86400",
                 "--json",
                 scrub_root=tmp_path,
             )
