@@ -1,0 +1,22 @@
+{
+  "name": "proteus",
+  "owner": {
+    "name": "Jacob Vogan"
+  },
+  "metadata": {
+    "version": "0.1.0",
+    "description": "Public-safe structural biology automation skills."
+  },
+  "plugins": [
+    {
+      "name": "proteus",
+      "displayName": "Proteus",
+      "source": "./",
+      "description": "Run structural biology automation workflows.",
+      "category": "life-sciences",
+      "tags": ["structural-biology", "pymol", "chimerax"],
+      "strict": false,
+      "skills": ["./skills/proteus"]
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "name": "proteus",
+  "version": "0.1.0",
+  "description": "Proteus skills for public-safe structural biology automation and molecular visualization workflows.",
+  "author": {
+    "name": "Jacob Vogan",
+    "url": "https://github.com/jvogan"
+  },
+  "homepage": "https://github.com/jvogan/proteus",
+  "repository": "https://github.com/jvogan/proteus",
+  "license": "MIT",
+  "keywords": ["structural-biology", "pymol", "chimerax"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Proteus",
+    "shortDescription": "Structural biology automation",
+    "longDescription": "Proteus skills for public-safe structural biology automation, PyMOL and ChimeraX workflows, AlphaFold DB and PDB lookup, Rosetta scoring, docking prep, and structure reports.",
+    "developerName": "Jacob Vogan",
+    "category": "Research",
+    "capabilities": ["Skills"],
+    "defaultPrompt": ["Use $proteus to plan a structural biology visualization or analysis workflow."]
+  }
+}

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Proteus"
+  short_description: "Structural biology automation"
+  default_prompt: "Use $proteus to plan a structural biology visualization or analysis workflow."

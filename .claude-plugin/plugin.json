@@ -1,0 +1,11 @@
+{
+  "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
+  "name": "proteus",
+  "version": "0.1.0",
+  "description": "Proteus skills for public-safe structural biology automation and molecular visualization workflows.",
+  "author": {
+    "name": "Jacob Vogan",
+    "url": "https://github.com/jvogan"
+  },
+  "skills": ["./skills/proteus"]
+}
