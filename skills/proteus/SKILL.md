@@ -303,8 +303,8 @@ python3 scripts/interaction_report.py complex.pdb --ligand ATP --json
 ### Dossiers And Batch Runs
 ```bash
 python3 scripts/target_dossier.py --gene TP53 --uniprot P04637 --pdb 1TUP --json
-python3 scripts/target_dossier.py --pdb tests/fixtures/tiny.pdb --no-network --json
-python3 scripts/target_dossier.py --pdb tests/fixtures/tiny.pdb --no-network --analyze-local --json
+python3 scripts/target_dossier.py --pdb structure.pdb --no-network --json
+python3 scripts/target_dossier.py --pdb structure.pdb --no-network --analyze-local --json
 python3 scripts/proteus_batch.py manifest.json --dry-run --json
 python3 scripts/proteus_report.py --input result.json --outdir proteus_report_out --json
 python3 scripts/proteus_cache.py verify --json
