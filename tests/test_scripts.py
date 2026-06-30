@@ -300,11 +300,14 @@ class ScriptTests(unittest.TestCase):
 
     def test_pymol_plddt_color_script_is_layered(self):
         script = pymol_agent._color_script("plddt")
-        # Broadest-first layering (no <= in PyMOL selection algebra)
+        # Broadest-first layering (no <= in PyMOL selection algebra), with
+        # confidence-scale detection for normalized 0-1 or AlphaFold 0-100 B-factors.
         self.assertIn('cmd.color("orange"', script)
-        self.assertIn("b > 50", script)
-        self.assertIn("b > 90", script)
-        self.assertLess(script.index("b > 50"), script.index("b > 90"))
+        self.assertIn("max(_proteus_b_values) <= 1.5", script)
+        self.assertIn("(0.50, 0.70, 0.90)", script)
+        self.assertIn("(50.0, 70.0, 90.0)", script)
+        self.assertLess(script.index('cmd.color("orange"'), script.index('cmd.color("yellow"'))
+        self.assertLess(script.index('cmd.color("yellow"'), script.index('cmd.color("blue"'))
 
     def test_chimerax_rest_color_validation(self):
         import chimerax_rest

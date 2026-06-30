@@ -50,6 +50,25 @@ If neither is found, do not guess paths. Continue with zero-dependency workflows
 (`scripts/pdb_info.py`, AlphaFold metadata fetches, file inspection) when they
 fit the task; otherwise tell the user what to install and stop.
 
+Run helper scripts from the repo or skill root with Python 3.10+:
+
+```bash
+cd <proteus-skill-or-repo-root>
+python3 scripts/proteus_doctor.py --network --json
+```
+
+On macOS, `/usr/bin/python3` may be 3.9 and too old for several helpers. Use a
+Homebrew, conda, pyenv, or system Python 3.10+ interpreter when the doctor marks
+Python as too old. Hardened launchers that set `PYTHONSAFEPATH=1` are supported:
+the helper entrypoints add their bundled `scripts/` directory before importing
+sibling modules.
+
+If PyMOL or ChimeraX are installed as macOS apps, the doctor can often find their
+app-bundle binaries even when they are not on `PATH`. For direct shell use, add
+the actual app `Contents/bin` directory to `PATH`. Install `ffmpeg` for spin
+movies. Confirm PyMOL is licensed before publishing renders because evaluation
+builds can watermark output.
+
 ## Tool Selection — When to Use What
 
 | Task | Best Tool | Why |
@@ -170,13 +189,16 @@ can skip by knowing them upfront.
 
 4. **`<=` doesn't exist in PyMOL selection syntax.** For pLDDT coloring, use
    layered overrides — paint the broadest range first, then override with
-   narrower selections:
+   narrower selections. `scripts/pymol_agent.py --color plddt` detects 0-1
+   and 0-100 B-factor/pLDDT scales before applying these bins:
    ```
    color orange, all           # base: everything is low confidence
    color yellow, b > 50        # override: medium
    color cyan, b > 70          # override: high
    color blue, b > 90          # override: very high
    ```
+   Use `--color bfactor` for an autoscaled spectrum when the B-factor column is
+   not a confidence score or the scale is unknown.
 
 5. **`cealign` argument order is (target, mobile).** The first argument is
    the reference that stays fixed; the second gets moved. This is opposite
@@ -317,9 +339,12 @@ python3 scripts/uniprot_lookup.py TP53 --gene-exact --json  # resolve accession 
 python3 scripts/fetch_alphafold.py P04637 --pae --json       # fetch p53 prediction
 # Output filename uses modelEntityId from API, typically AF-{UNIPROT}-F1.pdb
 python3 scripts/pae_report.py AF-P04637-F1_pae.json --json   # summarize domain uncertainty
-python3 scripts/pymol_agent.py render AF-P04637-F1.pdb output.png
+python3 scripts/pymol_agent.py render AF-P04637-F1.pdb output.png --color plddt
 ```
-Then color by pLDDT bins — see `references/alphafold.md` for the standard color scheme.
+For non-AlphaFold models with normalized 0-1 confidence in the B-factor column,
+`--color plddt` detects the scale. Use `--color bfactor` for an autoscaled view
+when B-factors are not confidence values. See `references/alphafold.md` for the
+standard color scheme.
 
 ### Predicted vs Experimental Comparison
 1. Fetch AlphaFold prediction for the protein's UniProt ID

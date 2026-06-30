@@ -109,13 +109,23 @@ def _color_script(color_mode: str, selection: str = "all") -> str:
     if color_mode == "chain":
         return f'util.cbc({sel})'
     if color_mode == "plddt":
-        # Official AlphaFold bins. Layered broadest-first because PyMOL selection
-        # algebra has no `<=`: paint everything low, then override upward.
+        # Official AlphaFold bins. Detect normalized 0-1 confidence values as
+        # used by some predictors, then layer broadest-first because PyMOL
+        # selection algebra has no `<=`.
         return "\n".join([
-            f'cmd.color("orange", {sel})',
-            f'cmd.color("yellow", {_py_literal(f"({selection}) and b > 50")})',
-            f'cmd.color("cyan", {_py_literal(f"({selection}) and b > 70")})',
-            f'cmd.color("blue", {_py_literal(f"({selection}) and b > 90")})',
+            f"_proteus_selection = {sel}",
+            "_proteus_b_values = []",
+            'cmd.iterate(_proteus_selection, "_proteus_b_values.append(b)", space={"_proteus_b_values": _proteus_b_values})',
+            "_proteus_scale01 = bool(_proteus_b_values and max(_proteus_b_values) <= 1.5)",
+            "_proteus_thresholds = (0.50, 0.70, 0.90) if _proteus_scale01 else (50.0, 70.0, 90.0)",
+            'cmd.color("orange", _proteus_selection)',
+            'cmd.color("yellow", f"({_proteus_selection}) and b > {_proteus_thresholds[0]}")',
+            'cmd.color("cyan", f"({_proteus_selection}) and b > {_proteus_thresholds[1]}")',
+            'cmd.color("blue", f"({_proteus_selection}) and b > {_proteus_thresholds[2]}")',
+            "try:",
+            '    _output["data"]["plddt_scale"] = "0-1" if _proteus_scale01 else "0-100"',
+            "except Exception:",
+            "    pass",
         ])
     return f'cmd.color({_py_literal(color_mode)}, {sel})'
 

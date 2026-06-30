@@ -9,6 +9,8 @@ Usage:
     python3 proteus_doctor.py --network --json
 """
 
+from __future__ import annotations
+
 import argparse
 import json
 import os
@@ -148,6 +150,11 @@ def _script_smoke() -> dict:
         "rosetta_score.py",
         "kras_dossier.py",
     ]
+    if sys.version_info < (3, 10):
+        return {
+            script: {"ok": False, "error": "skipped: Python 3.10+ required for helper scripts"}
+            for script in scripts
+        }
     results = {}
     for script in scripts:
         path = ROOT / "scripts" / script
