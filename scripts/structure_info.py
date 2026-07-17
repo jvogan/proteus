@@ -74,6 +74,7 @@ def parse_pdb(path: str, force_alphafold: bool = False) -> dict:
     atom_count = 0
     hetatm_count = 0
     b_factors = []
+    residue_confidence = {}
     title_lines = []
 
     with open(path) as handle:
@@ -94,6 +95,10 @@ def parse_pdb(path: str, force_alphafold: bool = False) -> dict:
                 chains.add(chain)
                 residues[chain].add((residue_name, residue_id))
                 b_factors.append(b_factor)
+                atom_name = line[12:16].strip()
+                insertion_code = line[26].strip() if len(line) > 26 else ""
+                if rec == "ATOM" and atom_name == "CA":
+                    residue_confidence[(chain, residue_id, insertion_code, residue_name)] = b_factor
                 if rec == "ATOM":
                     atom_count += 1
                 else:
@@ -108,6 +113,7 @@ def parse_pdb(path: str, force_alphafold: bool = False) -> dict:
         atom_count=atom_count,
         hetatm_count=hetatm_count,
         b_factors=b_factors,
+        residue_confidence=residue_confidence,
         force_alphafold=force_alphafold,
     )
 
@@ -140,6 +146,7 @@ def parse_mmcif(path: str, force_alphafold: bool = False) -> dict:
     atom_count = 0
     hetatm_count = 0
     b_factors = []
+    residue_confidence = {}
 
     index = 0
     while index < len(lines):
@@ -164,6 +171,8 @@ def parse_mmcif(path: str, force_alphafold: bool = False) -> dict:
         comp_i = field_index.get("_atom_site.label_comp_id", field_index.get("_atom_site.auth_comp_id"))
         seq_i = field_index.get("_atom_site.auth_seq_id", field_index.get("_atom_site.label_seq_id"))
         b_i = field_index.get("_atom_site.B_iso_or_equiv")
+        atom_i = field_index.get("_atom_site.auth_atom_id", field_index.get("_atom_site.label_atom_id"))
+        insertion_i = field_index.get("_atom_site.pdbx_PDB_ins_code")
 
         while index < len(lines):
             stripped = lines[index].strip()
@@ -193,7 +202,14 @@ def parse_mmcif(path: str, force_alphafold: bool = False) -> dict:
                 hetatm_count += 1
             if b_i is not None:
                 try:
-                    b_factors.append(float(row[b_i]))
+                    b_factor = float(row[b_i])
+                    b_factors.append(b_factor)
+                    atom_name = row[atom_i] if atom_i is not None else ""
+                    insertion_code = row[insertion_i] if insertion_i is not None else ""
+                    if insertion_code in {".", "?"}:
+                        insertion_code = ""
+                    if group == "ATOM" and atom_name == "CA":
+                        residue_confidence[(chain, seq, insertion_code, comp)] = b_factor
                 except ValueError:
                     pass
 
@@ -206,6 +222,7 @@ def parse_mmcif(path: str, force_alphafold: bool = False) -> dict:
         atom_count=atom_count,
         hetatm_count=hetatm_count,
         b_factors=b_factors,
+        residue_confidence=residue_confidence,
         force_alphafold=force_alphafold,
     )
 
@@ -213,6 +230,7 @@ def parse_mmcif(path: str, force_alphafold: bool = False) -> dict:
 def _build_output(path: str, fmt: str, title: str | None, chains: set[str],
                   residues: dict[str, set[tuple[str, str]]], atom_count: int,
                   hetatm_count: int, b_factors: list[float],
+                  residue_confidence: dict[tuple[str, str, str, str], float],
                   force_alphafold: bool) -> dict:
     sorted_chains = sorted(chains)
     chain_details = {
@@ -232,7 +250,22 @@ def _build_output(path: str, fmt: str, title: str | None, chains: set[str],
         "likely_alphafold": likely_alphafold,
     }
     if likely_alphafold and b_factors:
-        data["plddt_distribution"] = _plddt_distribution(b_factors)
+        values = list(residue_confidence.values()) or b_factors
+        data["plddt"] = {
+            "basis": "ca_per_residue" if residue_confidence else "all_atoms",
+            "statistics": _bfactor_stats(values),
+            "distribution": _plddt_distribution(values),
+            "residues": [
+                {
+                    "chain": key[0],
+                    "residue": f"{key[1]}{key[2]}",
+                    "resname": key[3],
+                    "plddt": round(value, 2),
+                }
+                for key, value in sorted(residue_confidence.items())
+            ],
+        }
+        data["plddt_distribution"] = data["plddt"]["distribution"]
     output = {"status": "ok", "data": data}
     output.update(data)
     return output

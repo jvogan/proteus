@@ -1,4 +1,7 @@
 interface:
   display_name: "Proteus"
-  short_description: "Structural biology automation"
-  default_prompt: "Use $proteus to plan a structural biology visualization or analysis workflow."
+  short_description: "Structural biology automation for AI coding agents"
+  default_prompt: "Use $proteus to run a readiness check when needed, resolve structure inputs to local files with provenance, choose the right structural biology toolchain, and return concise analysis plus any generated outputs."
+
+policy:
+  allow_implicit_invocation: true

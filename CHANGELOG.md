@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Added a unified `proteus.py` interface for coordinate QC, declarative
+  PyMOL/ChimeraX figures, state and interface comparisons, residue stories,
+  annotation overlays, distance restraints, assemblies, cryo-EM review,
+  ensembles, electrostatics, pocket detection, and chemical-site triage.
+- Added replayable script/session artifacts, privacy-safe provenance and
+  execution summaries, package-parity checks, and representative real-tool
+  validation for PyMOL and ChimeraX workflows.
+- Added chain-aware PAE summaries, per-residue AlphaFold confidence reporting,
+  and optional local DockQ and Foldseek adapters.
 - Added a `density` subcommand to `pymol_agent.py`: render a model in cryo-EM
   density (real `--map` or `--simulate`d gaussian density), with the mesh carved
   around the model or a `--residue` selection and the contour level taken from

@@ -149,6 +149,21 @@ def _script_smoke() -> dict:
         "design_run.py",
         "rosetta_score.py",
         "kras_dossier.py",
+        "proteus.py",
+        "structure_qc.py",
+        "scene_figure.py",
+        "state_compare.py",
+        "residue_story.py",
+        "interface_story.py",
+        "annotation_figure.py",
+        "restraint_report.py",
+        "assembly_explorer.py",
+        "cryoem_workflow.py",
+        "ensemble_report.py",
+        "electrostatics_workflow.py",
+        "pocket_tunnel.py",
+        "chemical_site.py",
+        "sync_skill_package.py",
     ]
     if sys.version_info < (3, 10):
         return {
@@ -179,6 +194,15 @@ def build_report(include_network: bool) -> dict:
     pymol = _find_pymol()
     chimerax = _find_chimerax()
     ffmpeg = shutil.which("ffmpeg")
+    optional = {
+        "apbs": shutil.which("apbs"),
+        "pdb2pqr": shutil.which("pdb2pqr") or shutil.which("pdb2pqr30"),
+        "fpocket": shutil.which("fpocket"),
+        "p2rank": shutil.which("prank") or shutil.which("p2rank"),
+        "usalign": shutil.which("USalign") or shutil.which("usalign"),
+        "dockq": shutil.which("DockQ") or shutil.which("dockq"),
+        "foldseek": shutil.which("foldseek"),
+    }
     network = None
     if include_network:
         network = {name: _network_check(url) for name, url in NETWORK_ENDPOINTS.items()}
@@ -190,6 +214,10 @@ def build_report(include_network: bool) -> dict:
         "pymol_rendering": bool(pymol),
         "chimerax_analysis": bool(chimerax),
         "turntable_movies": bool((pymol or chimerax) and ffmpeg),
+        "pocket_detection": bool(optional["fpocket"] or optional["p2rank"]),
+        "poisson_boltzmann_electrostatics": bool(optional["apbs"] and optional["pdb2pqr"]),
+        "local_structure_search": bool(optional["foldseek"]),
+        "complex_quality_scoring": bool(optional["dockq"]),
     }
     if network is not None:
         for capability, check_name in NETWORK_CAPABILITIES.items():
@@ -205,6 +233,10 @@ def build_report(include_network: bool) -> dict:
             "pymol": {"ok": bool(pymol), "path": _display_path(pymol)},
             "chimerax": {"ok": bool(chimerax), "path": _display_path(chimerax)},
             "ffmpeg": {"ok": bool(ffmpeg), "path": _display_path(ffmpeg)},
+            **{
+                name: {"ok": bool(path), "path": _display_path(path)}
+                for name, path in optional.items()
+            },
         },
         "scripts": _script_smoke(),
         "network": network,

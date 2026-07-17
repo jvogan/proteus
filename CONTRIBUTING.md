@@ -15,6 +15,7 @@ small tests that keep agents from repeating common mistakes.
 
 ```bash
 make test
+make package-check
 python3 scripts/proteus_doctor.py --json
 ```
 

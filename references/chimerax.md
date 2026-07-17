@@ -259,7 +259,7 @@ style #1 stick                    # Stick representation
 surface #1                        # Molecular surface
 ~surface                          # Remove surface
 color #1 red                      # Color model red
-color bychain #1                  # Color by chain
+color #1 bychain                  # Color by chain
 color bfactor #1                  # Color by B-factor
 color bfactor #1 palette alphafold  # AlphaFold confidence colors
 transparency #1 50                # 50% transparent
@@ -345,7 +345,7 @@ alphafold contacts #1             # Predicted contacts overlay
 open 21924 from emdb              # Downloads .map file
 
 # Display
-volume #1 style surface level 0.025 color #90CAF9 transparency 0.3 step 1
+volume #1 style surface level 0.025 color #90CAF9 transparency 30 step 1
 
 # Fit atomic model into map
 fitmap #2 inMap #1 metric correlation
@@ -443,17 +443,17 @@ Overlay text labels on the ChimeraX viewport (REST API or command):
 
 ```
 # Create a label
-2dlabels create name title text "Step 1: Load Structure" xpos 0.05 ypos 0.95 color black size 24 bold true
+2dlabels create title text "Step 1: Load Structure" xpos 0.05 ypos 0.95 color black size 24 bold true
 
 # Update it
-2dlabels change name title text "Step 2: Analyze"
+2dlabels change title text "Step 2: Analyze"
 
 # Delete all labels
-2dlabels delete
+2dlabels delete all
 
 # Multiple labels
-2dlabels create name step text "Step 1" xpos 0.05 ypos 0.95 color white size 20 bold true
-2dlabels create name detail text "Loading hemoglobin" xpos 0.05 ypos 0.90 color gray size 14
+2dlabels create step text "Step 1" xpos 0.05 ypos 0.95 color white size 20 bold true
+2dlabels create detail text "Loading hemoglobin" xpos 0.05 ypos 0.90 color gray size 14
 ```
 
 Coordinates: `xpos`/`ypos` are 0.0-1.0 fractions of viewport.
