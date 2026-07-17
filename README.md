@@ -38,6 +38,9 @@ Rosetta-oriented protein design guidance without building a custom plugin.
   cryo-EM workflows.
 - **Produces outputs agents can chain.** Reports use machine-readable JSON for
   parallel runs, CI checks, notebooks, and downstream analysis.
+- **Keeps local research local by default.** Coordinate files, maps, annotations,
+  and restraints are processed on the machine unless a public identifier is
+  explicitly resolved through a public data source.
 
 ## What It Provides
 
@@ -79,6 +82,14 @@ Rosetta-oriented protein design guidance without building a custom plugin.
 - Rosetta/PyRosetta patterns plus ML alternatives (ProteinMPNN, ESM2)
 - Zero-dependency PDB file inspector (`pdb_info.py` — stdlib only)
 - Structured JSON output from analysis helper scripts, safe for parallel runs
+- A unified `proteus.py` workflow interface with coordinate preflight, declarative
+  PyMOL/ChimeraX figures, state comparisons, residue and interface stories,
+  annotation overlays, restraint checks, assembly exploration, cryo-EM review,
+  ensemble analysis, electrostatics, pocket detection, and chemical-site triage
+- Replayable `.pml`/`.cxc` scripts and saved `.pse`/`.cxs` sessions for audit and
+  human handoff
+- Optional local DockQ, Foldseek, fpocket, P2Rank, PDB2PQR, and APBS capability
+  detection without automatic installation or structure uploads
 
 ## Agent Prompts That Work
 
@@ -91,6 +102,8 @@ Render the 1HSG binding pocket around indinavir in PyMOL and save a clean PNG.
 Compare AF-P04637-F1 against an experimental p53 structure and report RMSD plus high-deviation residues.
 Run a ChimeraX hydrogen-bond and SASA analysis for this protein-protein interface.
 Check whether 4HHB has validation red flags before using it as a reference structure.
+Build an apo/holo comparison with aligned PyMOL views and report contacts gained or lost.
+Inspect this cryo-EM model/map pair at several contour levels and save a ChimeraX session.
 ```
 
 ## Capabilities Matrix
@@ -104,6 +117,9 @@ Check whether 4HHB has validation red flags before using it as a reference struc
 | Headless structure rendering | no | yes | limited | no | no |
 | SASA, H-bonds, contacts, alignment | partial | partial | yes | no | optional |
 | Protein design/scoring guidance | docs | optional | optional | optional | yes |
+| Reproducible figure/scene manifests | scripts | yes | yes | no | no |
+| Cryo-EM map/model review | map stats | limited | yes | EMDB optional | no |
+| Ensemble, restraint, and annotation reports | yes | optional | optional | no | no |
 
 ## Generated Outputs
 
@@ -127,6 +143,7 @@ make test
 python3 scripts/proteus_doctor.py --json
 python3 scripts/resolve_structure.py TP53 --no-download --json
 python3 scripts/pocket_report.py tests/fixtures/tiny.pdb --json
+python3 scripts/proteus.py qc tests/fixtures/tiny.pdb --json
 ```
 
 These commands require only Python 3.10+. Install PyMOL or ChimeraX later when
@@ -174,6 +191,20 @@ Analyze the hydrogen bonds at a protein-protein interface in ChimeraX.
 The helper scripts also work standalone:
 
 ```bash
+python3 scripts/proteus.py --help                                  # unified workflow entry point
+python3 scripts/proteus.py qc structure.cif --json                 # coordinate preflight/QC
+python3 scripts/proteus.py figure scene.json --execute             # manifest -> figure + session
+python3 scripts/proteus.py compare apo.pdb holo.pdb --ligand ATP   # aligned state comparison
+python3 scripts/proteus.py residue model.cif A:42 --execute        # residue-centered story
+python3 scripts/proteus.py interface complex.cif --chains A,B      # interface analysis + figures
+python3 scripts/proteus.py annotate model.pdb scores.csv            # residue score overlay
+python3 scripts/proteus.py restraints model.pdb restraints.csv      # distance-restraint report
+python3 scripts/proteus.py assembly 4HHB --assembly 1               # ASU/assembly/crystal views
+python3 scripts/proteus.py cryoem model.cif map.mrc --resolution 3.2 # contour sweep/map review
+python3 scripts/proteus.py ensemble models.pdb                      # multi-model RMSF summary
+python3 scripts/proteus.py electrostatics model.pdb                 # qualitative Coulombic surface
+python3 scripts/proteus.py pockets model.pdb --detector auto        # local fpocket/P2Rank workflow
+python3 scripts/proteus.py chemical-site complex.cif --component ZN:A:501
 python3 scripts/pdb_info.py structure.pdb                          # zero-dep PDB inspection
 python3 scripts/structure_info.py structure.cif --json             # PDB/mmCIF inspection
 python3 scripts/fetch_pdb.py 4HHB --json                           # RCSB PDB fetch
@@ -202,6 +233,8 @@ python3 scripts/validation_report.py 4HHB --json                   # wwPDB valid
 python3 scripts/pocket_report.py tests/fixtures/tiny.cif --json     # ligand-pocket contacts
 python3 scripts/interface_report.py 1BRS --chains A,D --json        # protein-protein interface residues
 python3 scripts/model_quality.py detect --json                     # optional quality tool detection
+python3 scripts/model_quality.py dockq model.pdb native.pdb --json # DockQ when installed
+python3 scripts/model_quality.py foldseek query.pdb targets --json # local Foldseek search
 python3 scripts/resolve_structure.py TP53 --json                   # one-command resolver
 python3 scripts/pymol_agent.py render structure.pdb output.png     # headless render
 python3 scripts/pymol_agent.py pocket 1HSG.pdb pocket.png --label  # annotated binding-pocket figure
@@ -231,6 +264,7 @@ proteus/
 │   ├── file-formats.md
 │   ├── prediction-models.md
 │   ├── pymol.md
+│   ├── workflows.md
 │   └── rosetta.md
 └── scripts/              # Agent helper scripts (all stdlib-only)
     ├── add_helix_records.py
@@ -250,6 +284,9 @@ proteus/
     ├── ligand_extract.py
     ├── map_info.py
     ├── model_quality.py
+    ├── proteus.py
+    ├── structure_qc.py
+    ├── scene_figure.py
     ├── mutation_triage.py
     ├── pae_report.py
     ├── pdb_info.py

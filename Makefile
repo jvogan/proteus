@@ -1,7 +1,12 @@
-.PHONY: test release-check
+.PHONY: test package-check verify release-check
 
 test:
 	python3 -m unittest -v
+
+package-check:
+	python3 scripts/sync_skill_package.py --check --json
+
+verify: test package-check release-check
 
 # Pre-publish hygiene sweep: no tracked structures/maps/media/secrets, no large
 # files, no obvious secret strings. Run before pushing public changes.

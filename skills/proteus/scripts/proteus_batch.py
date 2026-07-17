@@ -22,6 +22,18 @@ TASKS = {
     "mutation_triage": "scripts/mutation_triage.py",
     "validation_report": "scripts/validation_report.py",
     "resolve_structure": "scripts/resolve_structure.py",
+    "structure_qc": "scripts/structure_qc.py",
+    "state_compare": "scripts/state_compare.py",
+    "residue_story": "scripts/residue_story.py",
+    "interface_story": "scripts/interface_story.py",
+    "annotation_figure": "scripts/annotation_figure.py",
+    "restraint_report": "scripts/restraint_report.py",
+    "assembly_explorer": "scripts/assembly_explorer.py",
+    "cryoem_workflow": "scripts/cryoem_workflow.py",
+    "ensemble_report": "scripts/ensemble_report.py",
+    "electrostatics_workflow": "scripts/electrostatics_workflow.py",
+    "pocket_tunnel": "scripts/pocket_tunnel.py",
+    "chemical_site": "scripts/chemical_site.py",
 }
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
 MAX_CAPTURE_CHARS = 20000
@@ -135,6 +147,17 @@ def build_command(task_spec, item_input: str, item_outdir: Path) -> list[str]:
         "interaction_report",
         "resolve_structure",
         "assembly_report",
+        "state_compare",
+        "residue_story",
+        "interface_story",
+        "annotation_figure",
+        "restraint_report",
+        "assembly_explorer",
+        "cryoem_workflow",
+        "ensemble_report",
+        "electrostatics_workflow",
+        "pocket_tunnel",
+        "chemical_site",
     } and not _has_option(extra_args, "--outdir"):
         command.extend(["--outdir", str(item_outdir)])
     if task != "mutation_triage":

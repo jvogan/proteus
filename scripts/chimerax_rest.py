@@ -15,7 +15,7 @@ Usage:
     python chimerax_rest.py render structure.pdb out.png --style surface --color bychain
     python chimerax_rest.py render model.pdb out.png --color plddt
     python chimerax_rest.py spin model.pdb spin.mp4 --frames 72        # needs ffmpeg
-    python chimerax_rest.py run "open 1ubq from pdb; cartoon; color bychain"
+    python chimerax_rest.py run "open 1ubq from pdb; cartoon; color #1 bychain"
     python chimerax_rest.py --help
 
 Environment:
@@ -240,7 +240,7 @@ def _scene_commands(style: str, color: str) -> list:
     cmds += styles.get(style, styles["cartoon"])
     color_cmd = {
         "rainbow": "rainbow #1",
-        "bychain": "color bychain #1",
+        "bychain": "color #1 bychain",
         "bfactor": "color bfactor #1",
         "plddt": "color bfactor #1 palette alphafold",
     }.get(color, f"color #1 {color}")
@@ -362,7 +362,7 @@ def main():
         epilog="Examples:\n"
                "  %(prog)s render structure.pdb out.png --color plddt\n"
                "  %(prog)s spin model.pdb spin.mp4 --frames 72\n"
-               "  %(prog)s run 'open 1ubq from pdb; cartoon; color bychain'",
+               "  %(prog)s run 'open 1ubq from pdb; cartoon; color #1 bychain'",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     sub = parser.add_subparsers(dest="command", required=True)

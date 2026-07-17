@@ -31,9 +31,13 @@ jobs:
       - name: Run tests
         run: python -m unittest -v
 
+      - name: Verify installable skill package parity
+        run: python scripts/sync_skill_package.py --check --json
+
       - name: JSON smoke checks
         run: |
           python scripts/proteus_doctor.py --json | python -m json.tool >/dev/null
           python scripts/resolve_structure.py tests/fixtures/tiny.pdb --json | python -m json.tool >/dev/null
           python scripts/pae_report.py tests/fixtures/tiny_pae.json --json | python -m json.tool >/dev/null
           python scripts/pocket_report.py tests/fixtures/tiny.pdb --json | python -m json.tool >/dev/null
+          python scripts/proteus.py qc tests/fixtures/tiny.pdb --json | python -m json.tool >/dev/null
